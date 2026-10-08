@@ -6,9 +6,12 @@
   "type": "app",
   "entry": "index.html",
   "icon": "icon.svg?v=1.0.0",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "config": {
+    "provider": "demo",
     "providerUrl": "",
-    "demoMode": true
+    "workspaceId": "",
+    "demoMode": true,
+    "connectionLabel": ""
   }
 }
