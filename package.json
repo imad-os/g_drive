@@ -1,0 +1,15 @@
+{
+  "name": "mydrive",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "MyDrive: a TV-first Google Drive explorer for My PC",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "vite": "^5.4.10"
+  }
+}
