@@ -155,7 +155,7 @@ npm run dev          # http://localhost:5173 (?demo=1 for the demo, ?app_config=
 npm run build        # -> docs/ (Chrome 108 target, every asset gets ?v=<version>)
 ```
 
-GitHub Pages: **Settings → Pages → Deploy from a branch → `master` / `/docs`**. Then, in the App Store Manager
+GitHub Pages: **Settings → Pages → Deploy from a branch → `main` / `/docs`**. Then, in the App Store Manager
 (https://imad-os.github.io/g/installer/), paste `https://imad-os.github.io/g_drive/`, press **Check** and
 **Add to store**. For every release, bump `version` in `public/mypc-app.json` (and its `icon?v=`), run
 `npm run build`, commit `docs/`, push, and press **Update** in the App Store Manager.

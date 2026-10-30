@@ -29,7 +29,7 @@ the app in the App Store Manager once GitHub Pages has published it.
 ## This app (MyDrive)
 
 - Built with Vite: source in `src/`, `index.html`, `picker.html`, `public/`; `npm run build` writes the site to `docs/`.
-  Commit `docs/` with every release. GitHub Pages serves **master / docs** (not main / root).
+  Commit `docs/` with every release. GitHub Pages serves **main / docs** (not main / root).
 - Version: `public/mypc-app.json` (`version` and the `icon?v=`); the build adds `?v=<version>` to every asset.
 - Google OAuth refresh tokens live in My PC save data (`MyPC.save('accounts')`) by the owner's choice; see README
   "How sign-in and cross-device accounts work" before changing anything about tokens.

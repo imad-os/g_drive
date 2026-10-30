@@ -23,7 +23,7 @@ export default defineConfig({
     define: { __APP_VERSION__: JSON.stringify(VERSION) },
     plugins: [versionQuery()],
     build: {
-        // GitHub Pages: Settings > Pages > Deploy from a branch > master / docs
+        // GitHub Pages: Settings > Pages > Deploy from a branch > main / docs
         outDir: 'docs',
         emptyOutDir: true,
         target: 'chrome108',
