@@ -8,14 +8,5 @@
   "icon": "icon.svg?v=1.0.2",
   "version": "1.0.2",
   "config": {
-    "google": {
-      "tvClientId": "",
-      "tvClientSecret": "",
-      "pickerClientId": "",
-      "pickerApiKey": "",
-      "projectNumber": ""
-    },
-    "pageSize": 100,
-    "thumbConcurrency": 4
-  }
+
 }
