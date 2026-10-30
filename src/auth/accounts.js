@@ -5,6 +5,7 @@
 import { store } from '../store.js';
 import { refreshAccessToken, revoke } from './oauth.js';
 import { AppError } from '../net.js';
+import { hasDriveScope, NO_DRIVE_MSG } from '../config.js';
 
 export class Accounts {
     constructor(cfg) {
@@ -30,6 +31,11 @@ export class Accounts {
         const old = store.account(who.id);
         const refreshToken = grant.refreshToken || (old && old.refreshToken) || '';
         if (!refreshToken) throw new AppError('no_refresh', 'Google did not return a refresh token.');
+        if (grant.scope && !hasDriveScope(grant.scope)) {
+            // only name / e-mail were allowed: useless for a Drive explorer, so give the grant back and say why
+            revoke(grant.refreshToken || grant.accessToken);
+            throw new AppError('scope_missing', NO_DRIVE_MSG);
+        }
         store.putAccount({ ...who, refreshToken, scope: grant.scope, addedAt: Date.now(), needsReauth: false });
         this.tokens.set(who.id, { accessToken: grant.accessToken, expiresAt: grant.expiresAt });
         store.setActive(who.id);
@@ -65,11 +71,13 @@ export class Accounts {
         if (!this.pending.has(acc.id)) {
             const p = refreshAccessToken(this.cfg, acc.refreshToken)
                 .then((g) => {
+                    if (g.scope && !hasDriveScope(g.scope)) throw this.markNoDrive();
                     this.tokens.set(acc.id, { accessToken: g.accessToken, expiresAt: g.expiresAt });
                     // Google may rotate the refresh token: keep the newest one in the profile's save data.
                     if (g.refreshToken && g.refreshToken !== acc.refreshToken) store.patchAccount(acc.id, { refreshToken: g.refreshToken });
                     return g.accessToken;
                 }, (e) => {
+                    if (e.code === 'reauth') throw e;
                     if (e.code === 'invalid_grant' || e.code === 'unauthorized_client' || e.code === 'invalid_client') {
                         store.patchAccount(acc.id, { needsReauth: true });
                         this.tokens.delete(acc.id);
@@ -84,6 +92,14 @@ export class Accounts {
             this.pending.set(acc.id, p);
         }
         return this.pending.get(acc.id);
+    }
+
+    /** The token lacks the Drive permission (Google answered "insufficient authentication scopes"): the user must link
+     *  again and allow Drive. Returns the error to throw. */
+    markNoDrive() {
+        const acc = this.active();
+        if (acc) { store.patchAccount(acc.id, { needsReauth: true }); this.tokens.delete(acc.id); this._emit(); }
+        return new AppError('reauth', NO_DRIVE_MSG);
     }
 
     /** The API said 401: forget the access token so the next call refreshes. */

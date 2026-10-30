@@ -62,6 +62,7 @@ export class DriveApi {
         const headers = Object.assign({ Authorization: 'Bearer ' + token }, opts.headers || {});
         const r = await requestRetry(url, Object.assign({ responseType: 'json', timeout: 30000 }, opts, { headers }));
         if (r.status === 401 && !retried) { this.accounts.invalidate(); return this.call(url, opts, true); }
+        if (r.status === 403 && /insufficient authentication scopes|ACCESS_TOKEN_SCOPE_INSUFFICIENT/i.test(JSON.stringify(r.body || ''))) throw this.accounts.markNoDrive();
         if (r.status === 403 && !retried && /rateLimit/i.test(JSON.stringify(r.body || ''))) {
             await new Promise((res) => setTimeout(res, 1500));
             return this.call(url, opts, true);

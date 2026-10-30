@@ -106,7 +106,7 @@ export function linkFlow(app) {
                     h('ol', { class: 'link-steps' },
                         h('li', null, 'On your phone or computer, scan the code or open ', h('b', null, flow.url.replace(/^https:\/\//, ''))),
                         h('li', null, 'Enter this code:', h('div', { class: 'user-code' }, flow.userCode)),
-                        h('li', null, 'Choose your Google account and allow MyDrive.'))),
+                        h('li', null, 'Choose your Google account and allow MyDrive. If Google shows checkboxes, tick the Google Drive one.'))),
                 h('p', { class: 'dlg-sub' }, 'MyDrive asks only for its own files and the files you choose (Google "drive.file" access), plus your name and e-mail. ', left));
             const tick = () => { const s = Math.max(0, Math.round((flow.expiresAt - Date.now()) / 1000)); left.textContent = `The code works for ${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')} more.`; };
             tick(); countdown = setInterval(tick, 1000);
@@ -124,12 +124,13 @@ export function linkFlow(app) {
                 invalid_client: 'Google does not accept this client: check google.tvClientId and google.tvClientSecret in the config' + (app.standalone ? ' (Test config).' : ' (App Store Manager > MyDrive > Config).'),
                 unauthorized_client: 'google.tvClientId is not a "TVs and Limited Input devices" client. Create one of that type and use its ID and secret.',
                 invalid_scope: 'Google refused the requested access (scope).',
+                scope_missing: e.message,
                 network: 'No connection to Google. Check the network and try again.'
             }[e.code] || e.message;
             clear(body);
             body.appendChild(h('p', { class: 'dlg-text error' }, msg));
             cancel.lastChild.textContent = 'Close';
-            if (window.MyPC && MyPC.report && !/access_denied|expired_token|network|timeout/.test(e.code)) MyPC.report(new Error('link: ' + e.code), { code: e.code });
+            if (window.MyPC && MyPC.report && !/access_denied|expired_token|network|timeout|scope_missing/.test(e.code)) MyPC.report(new Error('link: ' + e.code), { code: e.code });
         }
     })();
     return d.result;

@@ -52,4 +52,9 @@ export function readConfig(standalone) {
 }
 
 // Least privilege that works with Google's device flow (it refuses the broad `drive` scope).
-export const SCOPES = 'openid email profile https://www.googleapis.com/auth/drive.file';
+export const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file';
+export const SCOPES = 'openid email profile ' + DRIVE_SCOPE;
+/** Google's consent screen lets people untick single permissions: check Drive was really granted. */
+export function hasDriveScope(scope) { return String(scope || '').split(/\s+/).includes(DRIVE_SCOPE); }
+export const NO_DRIVE_MSG = 'Google Drive access was not allowed. Link the account again, and on Google\'s page tick the box '
+    + '"See, edit, create and delete only the specific Google Drive files you use with this app".';
