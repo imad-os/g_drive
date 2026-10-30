@@ -5,9 +5,7 @@
   "description": "Browse, view and play your Google Drive files with a TV remote or a game controller.",
   "type": "app",
   "entry": "index.html",
-  "icon": "icon.svg?v=1.0.2",
+  "icon": "icon.svg?v=1.0.3",
   "version": "1.0.3",
-  "config": {
-  }
-
+  "config": {}
 }
