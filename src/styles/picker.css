@@ -8,3 +8,4 @@ html { font-size: 16px; }
 .pk-msg { margin: 1.2rem 0; font-size: 1.1rem; }
 .pk-msg.error { color: var(--danger); }
 .pk-note { color: var(--text3); font-size: .95rem; }
+.pk-note a { color: var(--accent); }

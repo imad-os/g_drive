@@ -1,0 +1,10 @@
+/* Privacy policy and terms pages: plain, readable, dark. */
+html, body { margin: 0; background: #18191c; color: #e9ecf1; }
+body { font: 16px/1.6 "Segoe UI", system-ui, -apple-system, Roboto, Arial, sans-serif; }
+main { max-width: 46rem; margin: 0 auto; padding: 2.5rem 1.2rem 4rem; }
+h1 { font-size: 1.9rem; margin: 0 0 .4rem; }
+h2 { font-size: 1.2rem; margin: 2rem 0 .5rem; }
+.meta { color: #9aa1ad; margin: 0 0 1.6rem; }
+a { color: #63bcff; }
+code { background: #2c2f35; padding: .05rem .35rem; border-radius: .3rem; }
+li { margin: .35rem 0; }

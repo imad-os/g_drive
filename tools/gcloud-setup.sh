@@ -13,7 +13,8 @@ set -euo pipefail
 
 PROJECT_ID="${1:-${PROJECT_ID:-}}"
 ORIGIN="https://imad-os.github.io"
-REFERRER="https://imad-os.github.io/g_drive/*"
+SITE="https://imad-os.github.io/g_drive/"
+REFERRER="${SITE}*"
 KEY_NAME="MyDrive Picker"
 OUT="$HOME/mydrive-config.json"
 
@@ -82,6 +83,11 @@ step "4/5  Consent screen (manual: Google has no API for it)"
 cat <<EOF
    Open: $(b "$C/auth/overview?project=$PROJECT_ID")
      • Get started → App name: MyDrive · support email: yours → Audience: $(b External) → contact email → agree → Create
+   Open: $(b "$C/auth/branding?project=$PROJECT_ID")
+     • Application home page:         $(b "$SITE")
+     • Application privacy policy:    $(b "${SITE}privacy.html")
+     • Application terms of service:  $(b "${SITE}terms.html")
+     • Authorized domains → Add domain: $(b "imad-os.github.io") → $(b Save)
    Open: $(b "$C/auth/scopes?project=$PROJECT_ID")
      • Add or remove scopes → tick: openid, .../auth/userinfo.email, .../auth/userinfo.profile, .../auth/drive.file
        → Update → $(b Save)   (do NOT add .../auth/drive)

@@ -102,7 +102,10 @@ The manual steps it walks you through are the same as these:
 
 1. Create a project at https://console.cloud.google.com and enable the **Google Drive API** and the
    **Google Picker API**.
-2. **OAuth consent screen** (Google Auth Platform): External. Add the scopes `openid`, `email`, `profile` and
+2. **OAuth consent screen** (Google Auth Platform): External. In **Branding**, set the home page
+   `https://imad-os.github.io/g_drive/`, the privacy policy `https://imad-os.github.io/g_drive/privacy.html`,
+   the terms of service `https://imad-os.github.io/g_drive/terms.html`, and the authorized domain
+   `imad-os.github.io`. The two pages are in `public/` (edit the contact link if you want another one). Add the scopes `openid`, `email`, `profile` and
    `.../auth/drive.file`. Add a privacy policy link. Then **Publish app** (Production). While the app is in
    "Testing", refresh tokens expire after 7 days and users must link their account again.
 3. **Credentials → Create OAuth client ID → "TVs and Limited Input devices".** Keep its client ID and secret.
