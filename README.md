@@ -86,6 +86,20 @@ apps in "Testing".
 
 ## Google Cloud setup (store owner)
 
+**Fastest way:** open https://shell.cloud.google.com and run:
+
+```bash
+bash <(curl -sSL https://raw.githubusercontent.com/imad-os/g_drive/main/tools/gcloud-setup.sh)
+```
+
+[`tools/gcloud-setup.sh`](tools/gcloud-setup.sh) creates the project, enables the APIs, makes the restricted
+Picker API key and reads the project number. Google has no public API for the consent screen or for
+OAuth clients, so the script opens those console pages, says exactly what to click, asks for the IDs, and
+then prints the finished Config JSON. You can run it again safely: pass an existing project id as the first
+argument to reuse that project.
+
+The manual steps it walks you through are the same as these:
+
 1. Create a project at https://console.cloud.google.com and enable the **Google Drive API** and the
    **Google Picker API**.
 2. **OAuth consent screen** (Google Auth Platform): External. Add the scopes `openid`, `email`, `profile` and
