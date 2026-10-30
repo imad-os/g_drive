@@ -96,8 +96,8 @@ export class MockDrive {
         const i = parseInt(String(link).replace(/\D/g, ''), 10) || 0;
         return { buf: enc(svgImage(i + (String(link).includes('v') ? 50 : 0), 320, 180)), type: 'image/svg+xml' };
     }
-    async download(id) {
-        await delay(300);
+    async download(id, signal, onProgress) {
+        for (let i = 1; i <= 5; i++) { await delay(120); onProgress && onProgress(i / 5); }      // so the demo shows the bar
         const f = this._f(id);
         if (f.mimeType.startsWith('image/')) {
             const i = parseInt(id.replace(/\D/g, ''), 10) || 0;

@@ -123,7 +123,7 @@ export class FileGrid {
         if (f.thumbnailLink && !list) {
             this.thumbs.get(f, () => el.isConnected).then((url) => {
                 if (!url || !el.isConnected || el.dataset.id !== f.id) return;
-                const img = h('img', { alt: '', decoding: 'async', draggable: 'false' });
+                const img = h('img', { alt: '', decoding: 'async', draggable: 'false', referrerpolicy: 'no-referrer' });
                 img.onload = () => thumb.classList.add('has-img');
                 img.src = url;
                 thumb.appendChild(img);

@@ -3,6 +3,7 @@
 
 import { h, formatTime, formatSize } from './dom.js';
 import { Layer, onActivate } from './focus.js';
+import { progressText } from './progress.js';
 import { icon } from './icons.js';
 import { openStream } from '../media/stream.js';
 
@@ -87,7 +88,9 @@ export class Player extends Layer {
             this.video.src = this.stream.url;
         } else if ((+f.size || 0) <= FALLBACK_MAX) {
             try {
-                const r = await this.app.source.download(f.id);
+                const r = await this.app.source.download(f.id, undefined, (p) => {
+                    if (!this.closed && this.files[this.index] === f) this.status('Loading… ' + progressText(p, +f.size || 0));
+                });
                 if (this.closed || this.files[this.index] !== f) return;
                 this.blobUrl = URL.createObjectURL(new Blob([r.buf], { type: f.mimeType }));
                 this.video.src = this.blobUrl;

@@ -3,6 +3,8 @@
 import { h, formatSize } from './dom.js';
 import { Layer, onActivate } from './focus.js';
 import { icon } from './icons.js';
+import { progressBar, progressText } from './progress.js';
+import { drop } from '../media/thumbs.js';
 
 const MAX_FULL = 20 * 1024 * 1024;                              // bigger originals: Google's 1920 px rendition
 const NATIVE = /^image\/(jpeg|png|gif|webp|bmp|svg\+xml|avif|x-icon)$/;
@@ -15,7 +17,10 @@ export class Viewer extends Layer {
         this.url = ''; this.ctrl = null; this.zoom = 0; this.px = 0; this.py = 0;
         this.img = h('img', { class: 'viewer-img', alt: '', draggable: 'false' });
         this.stage = h('div', { class: 'viewer-stage' }, this.img);
-        this.msg = h('div', { class: 'viewer-msg' });
+        this.msgText = h('div');
+        this.pbar = progressBar();
+        this.pinfo = h('div', { class: 'pinfo' });
+        this.msg = h('div', { class: 'viewer-msg' }, this.msgText, this.pbar.el, this.pinfo);
         this.title = h('div', { class: 'viewer-title' });
         this.meta = h('div', { class: 'viewer-meta' });
         const b = (ic, label, fn) => { const x = h('button', { class: 'vbtn', type: 'button', 'aria-label': label }, h('span', { class: 'ico', html: ic }), h('span', { class: 'cmd-label' }, label)); return onActivate(x, fn); };
@@ -42,32 +47,43 @@ export class Viewer extends Layer {
         this.title.textContent = f.name;
         const im = f.imageMediaMetadata || {};
         this.meta.textContent = [`${this.index + 1} / ${this.files.length}`, im.width ? `${im.width} × ${im.height}` : '', formatSize(f.size)].filter(Boolean).join('   ·   ');
-        this.msg.textContent = 'Loading…'; this.msg.className = 'viewer-msg on';
+        this.say('Loading…', 'on', null);
         // the cached thumbnail first, so something shows at once
         const thumb = this.app.thumbs.cache.get(f.id);
         this.setSrc(thumb || '', false);
+        let url = '';
         try {
-            let blob;
             if ((+f.size || 0) > MAX_FULL || !NATIVE.test(f.mimeType)) {
                 if (!f.thumbnailLink) throw Object.assign(new Error('This image format cannot be shown on this screen.'), { code: 'format' });
-                const r = await this.app.source.thumbnail(f.thumbnailLink, 1920, ctrl.signal);
-                blob = new Blob([r.buf], { type: r.type });
+                url = await this.app.thumbs.url(f.thumbnailLink, 1920, ctrl.signal);     // one piece: no size known, the bar just moves
             } else {
-                const r = await this.app.source.download(f.id, ctrl.signal);
-                blob = new Blob([r.buf], { type: f.mimeType === 'image/svg+xml' || /svg/.test(r.type) ? 'image/svg+xml' : f.mimeType });
+                const size = +f.size || 0;
+                const r = await this.app.source.download(f.id, ctrl.signal, (p) => {
+                    if (!ctrl.signal.aborted) this.say('Loading…', 'on', p, progressText(p, size));
+                });
+                url = URL.createObjectURL(new Blob([r.buf], { type: f.mimeType === 'image/svg+xml' || /svg/.test(r.type) ? 'image/svg+xml' : f.mimeType }));
             }
-            if (ctrl.signal.aborted) return;
-            const url = URL.createObjectURL(blob);
+            if (ctrl.signal.aborted) { drop(url); return; }
+            this.say('Opening…', 'on', 1);
             await new Promise((res, rej) => { const t = new Image(); t.onload = res; t.onerror = () => rej(Object.assign(new Error('The image could not be decoded.'), { code: 'format' })); t.src = url; });
-            if (ctrl.signal.aborted) { URL.revokeObjectURL(url); return; }
-            this.setSrc(url, true);
-            this.msg.className = 'viewer-msg';
+            if (ctrl.signal.aborted) { drop(url); return; }
+            this.setSrc(url, url.startsWith('blob:'));
+            this.say('', '');
             this.preloadNeighbourThumbs();
         } catch (e) {
+            drop(url);
             if (ctrl.signal.aborted || e.code === 'cancelled') return;
-            this.msg.textContent = e.message || 'The image could not be loaded.';
-            this.msg.className = 'viewer-msg on error';
+            this.say(e.message || 'The image could not be loaded.', 'on error');
         }
+    }
+
+    /** The message in the middle; p: undefined = no bar, null = moving bar, 0..1 = progress. */
+    say(text, cls, p, details) {
+        this.msgText.textContent = text;
+        this.msg.className = 'viewer-msg ' + cls;
+        this.pbar.el.hidden = p === undefined;
+        if (p !== undefined) this.pbar.set(p);
+        this.pinfo.textContent = details || '';
     }
 
     setSrc(url, owned) {

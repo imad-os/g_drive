@@ -86,3 +86,23 @@ button:focus { outline: none; }
 }
 .toast.error { border-left-color: var(--danger); }
 @keyframes toast-in { from { opacity: 0; transform: translateY(.6rem); } }
+
+/* progress bars (ui/progress.js) */
+.pbar { position: relative; height: .42rem; border-radius: .21rem; background: rgba(255, 255, 255, .12); overflow: hidden; }
+.pbar-fill { height: 100%; width: 0; border-radius: inherit; background: var(--accent); transition: width 200ms linear; }
+.pbar.busy .pbar-fill { width: 35% !important; animation: pbar-busy 1.1s ease-in-out infinite; }
+@keyframes pbar-busy { from { transform: translateX(-100%); } to { transform: translateX(290%); } }
+.low .pbar-fill { transition: none; }
+.low .pbar.busy .pbar-fill { animation: none; width: 100% !important; opacity: .45; }
+
+.transfers { position: fixed; left: 2.6rem; bottom: 4.2rem; display: flex; flex-direction: column; gap: .6rem; z-index: 50; pointer-events: none; }
+.transfer {
+    width: 30rem; max-width: calc(100vw - 2rem); box-sizing: border-box; padding: .9rem 1.2rem;
+    display: flex; flex-direction: column; gap: .45rem;
+    background: var(--raised); border: 1px solid var(--stroke2); border-radius: var(--radius);
+    box-shadow: 0 .4rem 1.4rem rgba(0, 0, 0, .45); animation: toast-in var(--t) ease-out;
+}
+.transfer-title { font-size: 1rem; color: var(--text3); }
+.transfer-name { font-size: 1.15rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.transfer-info { font-size: 1rem; color: var(--text2); font-variant-numeric: tabular-nums; }
+@media (max-aspect-ratio: 4/3) { .transfers { left: 1rem; right: 1rem; } .transfer { width: auto; } }

@@ -1,7 +1,31 @@
-/* Thumbnails: fetched with the user's token (Drive thumbnail links are private and short-lived), at most
- * N at once, newest requests first, kept as blob: URLs in a small LRU that revokes what it drops. */
+/* Thumbnails, at most N at once, kept in a small LRU. Drive's thumbnail links (lh3.googleusercontent.com) are
+ * short-lived links that an <img> loads as they are; that server sends no CORS header, so in a browser they can
+ * only be shown that way, never fetched. Links an <img> cannot load (some Google Docs previews) are fetched with
+ * the user's token instead (works on the TV, where MyPC.net has no CORS limit) and kept as blob: URLs. */
 
-import { Limiter } from '../net.js';
+import { Limiter, AppError } from '../net.js';
+import { sizedThumb } from '../drive/api.js';
+
+/** Resolves true once the image loaded (it is then in the browser's cache), false if it cannot be shown. */
+function probe(url, signal) {
+    return new Promise((res) => {
+        const im = new Image();
+        im.referrerPolicy = 'no-referrer';
+        let timer;
+        const end = (ok) => {
+            clearTimeout(timer); im.onload = im.onerror = null;
+            if (signal) signal.removeEventListener('abort', onAbort);
+            if (!ok) im.removeAttribute('src');
+            res(ok);
+        };
+        const onAbort = () => end(false);
+        if (signal) signal.addEventListener('abort', onAbort);
+        timer = setTimeout(() => end(false), 20000);
+        im.onload = () => end(true);
+        im.onerror = () => end(false);
+        im.src = url;
+    });
+}
 
 const MAX = 160;
 
@@ -14,6 +38,7 @@ export class Thumbs {
         this.failed = new Set();
         this.ctrl = new AbortController();
         this.paused = false;
+        this.noFetch = false;         // fetching with the token failed on the network (CORS in a browser): stop trying
     }
     setSource(s) { this.reset(); this.source = s; }
 
@@ -26,19 +51,36 @@ export class Thumbs {
         const signal = this.ctrl.signal;
         const p = this.limiter.run(async () => {
             if (signal.aborted || (wanted && !wanted())) return '';
-            const { buf, type } = await this.source.thumbnail(file.thumbnailLink, 320, signal);
-            if (signal.aborted) return '';
-            const url = URL.createObjectURL(new Blob([buf], { type }));
+            const url = await this.url(file.thumbnailLink, 320, signal);
+            if (signal.aborted) { drop(url); return ''; }
             this.cache.set(file.id, url);
             while (this.cache.size > MAX) {
                 const [k, v] = this.cache.entries().next().value;
-                this.cache.delete(k); URL.revokeObjectURL(v);
+                this.cache.delete(k); drop(v);
             }
             return url;
         }).catch(() => { this.failed.add(file.id); return ''; })
             .finally(() => this.waiting.delete(file.id));
         this.waiting.set(file.id, p);
         return p;
+    }
+
+    /** A thumbnail link at `size` px -> a URL an <img> can show: Google's link itself when it loads, else a blob: URL
+     * (the caller revokes those, see drop()). */
+    async url(link, size, signal) {
+        if (this.source.directThumbs) {
+            const direct = sizedThumb(link, size);
+            if (await probe(direct, signal)) return direct;
+            if (signal && signal.aborted) throw new AppError('cancelled', 'Cancelled.');
+        }
+        if (this.noFetch) throw new AppError('thumb', 'This preview cannot be shown here.');
+        try {
+            const { buf, type } = await this.source.thumbnail(link, size, signal);
+            return URL.createObjectURL(new Blob([buf], { type }));
+        } catch (e) {
+            if (e.code === 'network') this.noFetch = true;
+            throw e;
+        }
     }
 
     /** Drop queued work (folder changed); finished thumbnails stay cached. */
@@ -52,8 +94,12 @@ export class Thumbs {
     /** Account switch / exit: nothing of the old account stays in memory. */
     reset() {
         this.cancelPending();
-        this.cache.forEach((u) => URL.revokeObjectURL(u));
+        this.cache.forEach(drop);
         this.cache.clear();
         this.failed.clear();
+        this.noFetch = false;
     }
 }
+
+/** Frees a thumbnail URL (only blob: URLs hold memory). */
+export function drop(url) { if (url && url.startsWith('blob:')) URL.revokeObjectURL(url); }

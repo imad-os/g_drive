@@ -20,6 +20,7 @@ import { Player } from './ui/player.js';
 import { AccountsScreen, addFilesDialog, controlsDialog } from './ui/accounts-ui.js';
 import { testConfigDialog } from './ui/test-config.js';
 import { icon } from './ui/icons.js';
+import { clearTransfers } from './ui/progress.js';
 import { netAvailable } from './net.js';
 
 class App {
@@ -168,6 +169,7 @@ class App {
         this.thumbs.reset();
         this.accounts.clearMemory();
         clearToasts();
+        clearTransfers();
     }
 }
 

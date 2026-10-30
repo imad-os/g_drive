@@ -7,6 +7,7 @@ import { icon, fileKind } from './icons.js';
 import { FileGrid, typeLabel } from './grid.js';
 import { menu, confirm, infoBox, toast } from './layers.js';
 import { typeText } from './osk.js';
+import { transferCard, progressText } from './progress.js';
 import { FOLDER } from '../drive/api.js';
 import { store } from '../store.js';
 
@@ -549,12 +550,16 @@ export class Explorer extends Layer {
             if (!files.length) return;
             const parent = this.loc.place.id;
             let done = 0, failed = 0;
-            for (const file of files) {
+            const card = transferCard('Uploading');
+            for (const [n, file] of files.entries()) {
+                const title = files.length > 1 ? `Uploading ${n + 1} of ${files.length}` : 'Uploading';
+                card.set(null, file.name, formatSize(file.size), title);
                 try {
-                    await this.app.source.upload(file, parent, (p) => { this.statusLeft.textContent = `Uploading "${file.name}"   ·   ${Math.round(p * 100)}%`; });
+                    await this.app.source.upload(file, parent, (p) => card.set(p, null, progressText(p, file.size)));
                     done++;
                 } catch (e) { failed++; this.app.handleError(e); }
             }
+            card.done();
             toast(failed ? `${done} uploaded, ${failed} failed` : `${done} file${done === 1 ? '' : 's'} uploaded`, failed ? 'error' : 'info');
             this.afterChange();
         });

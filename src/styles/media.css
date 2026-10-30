@@ -56,3 +56,7 @@
 .btn-row { display: flex; align-items: center; gap: .4rem; justify-content: center; }
 .btn-gap { width: 2.4rem; }
 .vol-label { min-width: 4rem; text-align: center; font-size: 1.05rem; color: var(--text2); }
+
+.viewer-msg .pbar { margin-top: .8rem; width: 22rem; max-width: 100%; }
+.viewer-msg .pinfo { margin-top: .45rem; font-size: 1rem; color: var(--text2); font-variant-numeric: tabular-nums; }
+.viewer-msg .pinfo:empty { display: none; }

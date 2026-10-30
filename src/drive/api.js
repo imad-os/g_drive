@@ -54,13 +54,19 @@ function sortOrder(p) {
     }
 }
 
+/** Google's thumbnail links end in =s<px>: ask for the size we show. */
+export function sizedThumb(link, size) { return String(link).replace(/=s\d+$/, '') + '=s' + size; }
+
 export class DriveApi {
     constructor(accounts) { this.accounts = accounts; }
+    /** Thumbnail links can be loaded by an <img> as they are (no token, no CORS check). */
+    get directThumbs() { return true; }
 
     async call(url, opts = {}, retried = false) {
         const token = await this.accounts.token();
-        const headers = Object.assign({ Authorization: 'Bearer ' + token }, opts.headers || {});
-        const r = await requestRetry(url, Object.assign({ responseType: 'json', timeout: 30000 }, opts, { headers }));
+        const { tries, ...o } = opts;
+        const headers = Object.assign({ Authorization: 'Bearer ' + token }, o.headers || {});
+        const r = await requestRetry(url, Object.assign({ responseType: 'json', timeout: 30000 }, o, { headers }), tries);
         if (r.status === 401 && !retried) { this.accounts.invalidate(); return this.call(url, opts, true); }
         if (r.status === 403 && /insufficient authentication scopes|ACCESS_TOKEN_SCOPE_INSUFFICIENT/i.test(JSON.stringify(r.body || ''))) throw this.accounts.markNoDrive();
         if (r.status === 403 && !retried && /rateLimit/i.test(JSON.stringify(r.body || ''))) {
@@ -117,20 +123,33 @@ export class DriveApi {
         return { buf: r.body, total: cr ? +cr[1] : 0, type: r.headers['content-type'] || '' };
     }
 
-    /** A whole (small) file. */
-    async download(id, signal) {
-        const r = await this.call(`${API}/files/${encodeURIComponent(id)}?alt=media`, { responseType: 'arraybuffer', timeout: 120000, signal });
-        return { buf: r.body, type: r.headers['content-type'] || '' };
+    /** A whole (small) file, in 1 MB ranges so onProgress(0..1) can follow it. */
+    async download(id, signal, onProgress) {
+        const PIECE = 1024 * 1024;
+        let out = null, got = 0, type = '';
+        for (;;) {
+            let r;
+            try { r = await this.range(id, got, got + PIECE - 1, signal); }
+            catch (e) { if (e.code === 'range' && !got) return { buf: new ArrayBuffer(0), type }; throw e; }   // an empty file
+            type = type || r.type;
+            const piece = new Uint8Array(r.buf);
+            if (!r.total) { onProgress && onProgress(1); return { buf: r.buf, type }; }                      // the whole file came at once
+            if (!out) out = new Uint8Array(r.total);
+            out.set(piece.subarray(0, Math.max(0, Math.min(piece.length, r.total - got))), got);
+            got += piece.length;
+            onProgress && onProgress(Math.min(1, got / r.total));
+            if (got >= r.total || !piece.length) return { buf: out.buffer, type };
+        }
     }
 
-    /** A Drive thumbnail (short-lived, private): fetched with the token, never used as a public URL. */
+    /** A Drive thumbnail fetched with the token (used when the screen cannot load Google's link itself). One try:
+     * in a browser this fails on CORS every time, so retrying only repeats the error. */
     async thumbnail(link, size, signal) {
-        const url = String(link).replace(/=s\d+$/, '') + '=s' + size;
-        const r = await this.call(url, { responseType: 'arraybuffer', timeout: 20000, signal });
+        const r = await this.call(sizedThumb(link, size), { responseType: 'arraybuffer', timeout: 20000, signal, tries: 1 });
         return { buf: r.body, type: r.headers['content-type'] || 'image/jpeg' };
     }
 
-    /** Resumable upload in 8 MB pieces. onProgress(0..1). */
+    /** Resumable upload in 2 MB pieces (a multiple of 256 KB, as Google asks), so onProgress(0..1) moves often. */
     async upload(file, parentId, onProgress, signal) {
         const init = await this.call(`${UPLOAD}?uploadType=resumable&fields=${encodeURIComponent(FIELDS)}`, {
             method: 'POST', signal,
@@ -139,7 +158,7 @@ export class DriveApi {
         });
         const session = init.headers.location;
         if (!session) throw new AppError('upload', 'Google did not open an upload session.');
-        const CHUNK = 8 * 1024 * 1024;
+        const CHUNK = 2 * 1024 * 1024;
         let at = 0;
         for (;;) {
             const end = Math.min(file.size, at + CHUNK);
