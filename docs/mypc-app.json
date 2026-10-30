@@ -6,7 +6,7 @@
   "type": "app",
   "entry": "index.html",
   "icon": "icon.svg?v=1.0.2",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "config": {
 
 }
