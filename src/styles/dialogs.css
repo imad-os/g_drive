@@ -75,7 +75,7 @@
 
 /* accounts + linking */
 .dlg-accounts { width: 64rem; }
-.acc-body { overflow-y: auto; }
+.acc-body { overflow-y: auto; padding: .4rem; margin: -.4rem; }
 .notice { display: flex; gap: .8rem; align-items: flex-start; padding: 1rem 1.1rem; margin-bottom: 1rem; border-radius: var(--radius); background: rgba(242, 193, 78, .1); border: 1px solid rgba(242, 193, 78, .3); font-size: 1.1rem; color: #f3dfa9; }
 .acc-row { display: flex; align-items: center; gap: 1.1rem; padding: .9rem 1rem; margin-bottom: .5rem; border-radius: var(--radius); background: var(--surface2); border: 1px solid var(--stroke); }
 .acc-row.active { border-color: rgba(99, 188, 255, .45); }
@@ -100,3 +100,18 @@
     .link-grid { grid-template-columns: 1fr; justify-items: center; }
     .acc-row { flex-wrap: wrap; }
 }
+
+/* standalone test config */
+.dlg-testcfg { width: 64rem; }
+.cfg-text {
+    box-sizing: border-box; width: 100%; height: 19rem; resize: none;
+    padding: .8rem 1rem; margin-bottom: .6rem;
+    background: var(--bg); color: var(--text); border: 1px solid var(--stroke2); border-radius: var(--radius);
+    font: 1.05rem/1.45 "Cascadia Mono", Consolas, "Courier New", monospace;
+    user-select: text;
+}
+.cfg-text:focus { outline: var(--ring) solid var(--accent); outline-offset: .14rem; }
+.cfg-msg { min-height: 1.5rem; margin: 0 0 .4rem; font-size: 1.05rem; color: var(--text2); }
+.cfg-msg.ok { color: #6fdc9b; }
+.cfg-msg.warn { color: #f3d27a; }
+.cfg-msg.err { color: var(--danger); }

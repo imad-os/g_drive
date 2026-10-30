@@ -27,9 +27,16 @@ export class AccountsScreen extends Dialog {
         const who = a.profileName ? `My PC profile: ${a.profileName}` : '';
         this.body.appendChild(h('p', { class: 'dlg-sub' }, [who,
             'Linked accounts follow this My PC profile to every TV, phone and computer it signs in on. Other profiles never see them.'].filter(Boolean).join('   ·   ')));
+        if (a.standalone) {
+            const from = { url: 'from the address (?app_config=)', test: 'your test config saved in this browser', none: 'none yet' }[a.cfg.from] || a.cfg.from;
+            this.body.appendChild(h('div', { class: 'notice' }, h('span', { class: 'ico', html: icon.info }),
+                h('span', null, 'Running outside My PC (testing). Config: ' + from + '. Linked accounts are kept in this browser only.')));
+        }
         if (!a.accounts.configured()) {
             this.body.appendChild(h('div', { class: 'notice' }, h('span', { class: 'ico', html: icon.info }),
-                h('span', null, 'Google sign-in is not set up for this app yet. The store owner adds the Google client in App Store Manager > Config (see the README). You can try the demo meanwhile.')));
+                h('span', null, a.standalone
+                    ? 'Google sign-in is off: paste your config with "Test config" (same JSON as App Store Manager > Config), or try the demo.'
+                    : 'Google sign-in is not set up for this app yet. The store owner adds the Google client in App Store Manager > Config (see the README). You can try the demo meanwhile.')));
         }
         list.forEach((acc) => {
             const isActive = active && active.id === acc.id && !a.demo;
@@ -46,7 +53,8 @@ export class AccountsScreen extends Dialog {
         const actions = h('div', { class: 'dlg-actions wrap' });
         if (a.accounts.configured()) actions.appendChild(this.button(list.length ? 'Link another Google account' : 'Link a Google account', icon.link, () => this.link(), { cls: 'primary', autofocus: '1' }));
         if (list.length && a.cfg.pickerClientId) actions.appendChild(this.button('Add files from phone', icon.phone, () => a.openAddFiles()));
-        actions.appendChild(this.button(a.demo ? 'Leave the demo' : 'Try the demo', icon.view, () => { a.setDemo(!a.demo); this.close(true); }, { autofocus: a.accounts.configured() ? null : '1' }));
+        if (a.standalone) actions.appendChild(this.button('Test config…', icon.rename, () => a.openTestConfig(), { cls: a.accounts.configured() ? '' : 'primary', autofocus: a.accounts.configured() ? null : '1' }));
+        actions.appendChild(this.button(a.demo ? 'Leave the demo' : 'Try the demo', icon.view, () => { a.setDemo(!a.demo); this.close(true); }));
         if (!this.welcome || list.length) actions.appendChild(this.button('Close', icon.close, () => this.close(false)));
         this.body.appendChild(actions);
         if (this.stack) this.focusFirst();
@@ -113,8 +121,8 @@ export function linkFlow(app) {
             const msg = {
                 access_denied: 'You chose not to allow MyDrive. Nothing was linked.',
                 expired_token: 'The code expired before it was used. Try again.',
-                invalid_client: 'The Google client in the app config is wrong. The store owner must fix it in App Store Manager > Config.',
-                unauthorized_client: 'This Google client is not a "TVs and Limited Input devices" client. The store owner must fix it.',
+                invalid_client: 'Google does not accept this client: check google.tvClientId and google.tvClientSecret in the config' + (app.standalone ? ' (Test config).' : ' (App Store Manager > MyDrive > Config).'),
+                unauthorized_client: 'google.tvClientId is not a "TVs and Limited Input devices" client. Create one of that type and use its ID and secret.',
                 invalid_scope: 'Google refused the requested access (scope).',
                 network: 'No connection to Google. Check the network and try again.'
             }[e.code] || e.message;

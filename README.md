@@ -164,6 +164,22 @@ src/picker.js                  phone page: Google Picker for "Add files"
 docs/                          build output served by GitHub Pages
 ```
 
+## Test without My PC (standalone)
+
+Open the site directly in a desktop browser, for example `https://imad-os.github.io/g_drive/` or
+`http://localhost:5173` with `npm run dev`. On the welcome screen (or in the MyDrive menu: Start / Select) choose
+**Test config…** and paste **the same JSON as App Store Manager > MyDrive > Config**. Press **Save and reload**
+and **Link a Google account** uses it.
+
+- The pasted config is kept only in this browser (`localStorage`, key `mydrive_test_config`), and the button
+  only appears outside My PC. Inside My PC, the App Store config is always the one used.
+- An `?app_config={...}` in the address wins over the saved test config.
+- Outside My PC the SDK keeps saves (including linked accounts and their refresh tokens) in this browser's
+  `localStorage`, not in a My PC profile. Use a test Google account, and **Disconnect** when you are done.
+- In a browser, `MyPC.net` only reaches sites that allow cross-origin requests. Google's sign-in and Drive APIs
+  do. If thumbnails fail in a browser but work on the TV, this is the reason.
+- **Remove test config** in the same dialog goes back to no config.
+
 ## Develop, build, publish
 
 ```bash

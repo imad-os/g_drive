@@ -18,6 +18,7 @@ import { Explorer } from './ui/explorer.js';
 import { Viewer } from './ui/viewer.js';
 import { Player } from './ui/player.js';
 import { AccountsScreen, addFilesDialog, controlsDialog } from './ui/accounts-ui.js';
+import { testConfigDialog } from './ui/test-config.js';
 import { icon } from './ui/icons.js';
 import { netAvailable } from './net.js';
 
@@ -26,7 +27,8 @@ class App {
         this.info = info || {};
         this.lang = this.info.lang || 'en';
         this.profileName = (this.info.profile && this.info.profile.name) || '';
-        this.cfg = readConfig();
+        this.standalone = !!this.info.standalone;
+        this.cfg = readConfig(this.standalone);
         document.documentElement.dir = 'ltr';           // texts are English for now: keep the layout left-to-right
         const low = (this.info.quality && this.info.quality.tier === 'low') || store.prefs().reduceMotion
             || (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
@@ -77,6 +79,7 @@ class App {
     }
     openAddFiles() { if (this.demo) { toast('Adding files needs a linked Google account.'); return; } addFilesDialog(this); }
     showControls() { controlsDialog(this); }
+    openTestConfig() { if (this.standalone) testConfigDialog(this); }
     openViewer(files, i) { if (i >= 0) this.stack.push(new Viewer(this, files, i)); }
     openPlayer(files, i, siblings) { if (i >= 0) this.stack.push(this.player = new Player(this, files, i, siblings)); }
     explorerDetails(f) { this.explorer.details('', f); }
@@ -86,12 +89,14 @@ class App {
             { id: 'accounts', label: 'Google accounts…', icon: icon.user },
             { id: 'add', label: 'Add files from phone', icon: icon.phone },
             { id: 'controls', label: 'Controls', icon: icon.gamepad },
+            this.standalone ? { id: 'testcfg', label: 'Test config…', icon: icon.rename } : null,
             { id: 'motion', label: 'Reduce animations', icon: icon.check, checked: document.documentElement.classList.contains('low') },
             { sep: true },
-            { id: 'exit', label: 'Exit MyDrive', icon: icon.exit }] });
+            { id: 'exit', label: 'Exit MyDrive', icon: icon.exit }].filter(Boolean) });
         if (id === 'accounts') this.openAccounts();
         else if (id === 'add') this.openAddFiles();
         else if (id === 'controls') this.showControls();
+        else if (id === 'testcfg') this.openTestConfig();
         else if (id === 'motion') { const on = !document.documentElement.classList.contains('low'); document.documentElement.classList.toggle('low', on); store.setPref('reduceMotion', on); }
         else if (id === 'exit') MyPC.exit();
     }
