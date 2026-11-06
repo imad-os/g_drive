@@ -39,8 +39,8 @@ export function typeText(stack, { title, value = '', placeholder = '', ok = 'Don
     d.panel.append(shown, grid);
     const base = d.handle.bind(d);
     d.handle = (cmd, info) => {
-        if (cmd === 'search' || cmd === 'menu') { d.close(text); return true; }       // Y / Start = done
-        if (cmd === 'ctx') { text = text.slice(0, -1); render(); return true; }       // X = delete
+        if (cmd === 'search' || cmd === 'menu') { d.close(text); return true; }       // X / + = done
+        if (cmd === 'ctx') { text = text.slice(0, -1); render(); return true; }       // Y = delete
         return base(cmd, info);
     };
     stack.push(d);

@@ -1,14 +1,13 @@
-/* TV video / audio player. The <video> streams from Drive through the streaming worker (Range requests,
- * 2 MB pieces), so seeking works and a movie is never held in memory as a whole. */
+/* TV video / audio player. The <video> streams from Drive through My PC (MyPC.drive.stream + public/sw.js: Range
+ * requests in 2 MB pieces), so seeking works and a movie is never held in memory as a whole. Where service workers
+ * are missing, My PC downloads a small file whole and it plays from a blob. */
 
-import { h, formatTime, formatSize } from './dom.js';
+import { h, formatTime } from './dom.js';
 import { Layer, onActivate } from './focus.js';
 import { progressText } from './progress.js';
 import { icon } from './icons.js';
-import { openStream } from '../media/stream.js';
 
 const HIDE_MS = 4500;
-const FALLBACK_MAX = 64 * 1024 * 1024;     // no streaming worker: small files only, as one blob
 
 function srtToVtt(text) {
     return 'WEBVTT\n\n' + String(text).replace(/\r/g, '').replace(/(\d\d:\d\d:\d\d),(\d\d\d)/g, '$1.$2');
@@ -18,7 +17,7 @@ export class Player extends Layer {
     constructor(app, files, index, siblings) {
         super(h('div', { class: 'player' }));
         this.app = app; this.files = files; this.index = Math.max(0, index); this.siblings = siblings || [];
-        this.stream = null; this.blobUrl = ''; this.trackUrl = ''; this.hideTimer = 0; this.wasPlaying = false; this.raf = 0;
+        this.stream = null; this.trackUrl = ''; this.hideTimer = 0; this.wasPlaying = false; this.raf = 0;
         this.video = h('video', { class: 'player-video', preload: 'metadata', playsinline: '' });
         this.poster = h('div', { class: 'player-audio', html: icon.audio });
         this.msg = h('div', { class: 'player-msg' });
@@ -81,24 +80,19 @@ export class Player extends Layer {
         const can = this.video.canPlayType(f.mimeType);
         this.status(can ? 'Loading…' : 'Loading… (this format may not play on this screen)');
         this.showControls();
-        const streaming = await this.app.streaming;
-        if (this.closed || this.files[this.index] !== f) return;
-        if (streaming) {
-            this.stream = openStream(f);
-            this.video.src = this.stream.url;
-        } else if ((+f.size || 0) <= FALLBACK_MAX) {
-            try {
-                const r = await this.app.source.download(f.id, undefined, (p) => {
-                    if (!this.closed && this.files[this.index] === f) this.status('Loading… ' + progressText(p, +f.size || 0));
-                });
-                if (this.closed || this.files[this.index] !== f) return;
-                this.blobUrl = URL.createObjectURL(new Blob([r.buf], { type: f.mimeType }));
-                this.video.src = this.blobUrl;
-            } catch (e) { this.status(e.message, true); return; }
-        } else {
-            this.status(`Streaming is not available in this browser, and this file (${formatSize(f.size)}) is too big to load at once.`, true);
+        let st;
+        try {
+            st = await this.app.source.stream(f, (p) => {
+                if (!this.closed && this.files[this.index] === f) this.status('Loading… ' + progressText(p, +f.size || 0));
+            });
+        } catch (e) {
+            if (!this.closed && this.files[this.index] === f && e.code !== 'cancelled') this.status(e.message, true);
             return;
         }
+        if (this.closed || this.files[this.index] !== f) { st.close(); return; }
+        if (this.stream) this.stream.close();
+        this.stream = st;
+        this.video.src = st.url;
         this.attachSubs(f);
         this.video.play().catch(() => { /* autoplay refused: the play button is focused */ });
     }
@@ -222,7 +216,6 @@ export class Player extends Layer {
         v.removeAttribute('src');
         try { v.load(); } catch (e) { /* nothing loaded */ }
         if (this.stream) { this.stream.close(); this.stream = null; }
-        if (this.blobUrl) { URL.revokeObjectURL(this.blobUrl); this.blobUrl = ''; }
         if (this.trackUrl) { URL.revokeObjectURL(this.trackUrl); this.trackUrl = ''; }
         this.ccBtn.classList.remove('on');
     }

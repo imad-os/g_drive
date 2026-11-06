@@ -1,7 +1,7 @@
 /* Thumbnails, at most N at once, kept in a small LRU. Drive's thumbnail links (lh3.googleusercontent.com) are
  * short-lived links that an <img> loads as they are; that server sends no CORS header, so in a browser they can
- * only be shown that way, never fetched. Links an <img> cannot load (some Google Docs previews) are fetched with
- * the user's token instead (works on the TV, where MyPC.net has no CORS limit) and kept as blob: URLs. */
+ * only be shown that way, never fetched. Links an <img> cannot load (some Google Docs previews) are fetched
+ * through My PC instead (MyPC.drive.thumbnail) and kept as blob: URLs. */
 
 import { Limiter, AppError } from '../net.js';
 import { sizedThumb } from '../drive/api.js';
@@ -38,7 +38,7 @@ export class Thumbs {
         this.failed = new Set();
         this.ctrl = new AbortController();
         this.paused = false;
-        this.noFetch = false;         // fetching with the token failed on the network (CORS in a browser): stop trying
+        this.noFetch = false;         // fetching through My PC failed on the network (CORS in a browser): stop trying
     }
     setSource(s) { this.reset(); this.source = s; }
 

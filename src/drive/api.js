@@ -1,16 +1,12 @@
-/* Google Drive API v3 over MyPC.net. Every call carries the active account's bearer token in a header,
- * never in a URL. https://developers.google.com/drive/api/reference/rest/v3 */
+/* Google Drive through My PC (MyPC.drive, SDK API level 14, guide section 19). My PC owns the Google sign-in and sends
+ * every Drive request for MyDrive: this file holds no token, client ID or Google address, it only adapts MyPC.drive to
+ * the calls MyDrive's screens make (the same ones as the demo in mock.js). */
 
-import { requestRetry, AppError } from '../net.js';
+import { AppError } from '../net.js';
 
-const API = 'https://www.googleapis.com/drive/v3';
-const UPLOAD = 'https://www.googleapis.com/upload/drive/v3/files';
 export const FOLDER = 'application/vnd.google-apps.folder';
-const FIELDS = 'id,name,mimeType,size,modifiedTime,createdTime,starred,trashed,parents,hasThumbnail,thumbnailLink,fileExtension,'
-    + 'imageMediaMetadata(width,height),videoMediaMetadata(width,height,durationMillis),owners(displayName),'
-    + 'capabilities(canRename,canTrash,canUntrash,canCopy,canMoveItemWithinDrive,canAddChildren,canDownload,canEdit)';
-
-export function escapeQ(s) { return String(s).replace(/\\/g, '\\\\').replace(/'/g, "\\'"); }
+const WORKER = 'sw.js';                         // public/sw.js imports My PC's drive-sw.js (Range streaming)
+const BLOB_MAX = 64 * 1024 * 1024;              // without the worker: small files only, as one blob
 
 /** Validates a name typed by the user before it is sent. */
 export function cleanName(name) {
@@ -20,28 +16,53 @@ export function cleanName(name) {
     return n;
 }
 
-const DOC_Q = "(mimeType contains 'application/vnd.google-apps.document' or mimeType contains 'application/vnd.google-apps.spreadsheet'"
-    + " or mimeType contains 'application/vnd.google-apps.presentation' or mimeType = 'application/pdf' or mimeType contains 'text/'"
-    + " or mimeType contains 'officedocument' or mimeType contains 'msword' or mimeType contains 'ms-excel' or mimeType contains 'ms-powerpoint')";
+/** Google's thumbnail links end in =s<px>: ask for the size we show. */
+export function sizedThumb(link, size) { return String(link).replace(/=s\d+$/, '') + '=s' + size; }
 
-/** A place in Drive -> files.list parameters. place = { kind, id?, text? } */
-export function placeQuery(place, prefs) {
-    const alive = 'trashed = false';
-    let q, orderBy = sortOrder(prefs);
-    switch (place.kind) {
-        case 'folder': q = `'${escapeQ(place.id)}' in parents and ${alive}`; break;
-        case 'all': q = alive; break;                                  // everything MyDrive may see, wherever it lives
-        case 'starred': q = `starred = true and ${alive}`; break;
-        case 'recent': q = `mimeType != '${FOLDER}' and ${alive}`; orderBy = 'recency desc'; break;
-        case 'images': q = `mimeType contains 'image/' and ${alive}`; break;
-        case 'videos': q = `mimeType contains 'video/' and ${alive}`; break;
-        case 'audio': q = `mimeType contains 'audio/' and ${alive}`; break;
-        case 'documents': q = `${DOC_Q} and ${alive}`; break;
-        case 'trash': q = 'trashed = true'; break;
-        case 'search': q = `name contains '${escapeQ(place.text)}' and ${alive}`; break;
-        default: throw new AppError('bad_place', 'Unknown place ' + place.kind);
-    }
-    return { q, orderBy };
+/** Is My PC's Google Drive there? (API 14 and the drive bridge; standalone the SDK runs it in the page.) */
+export function driveAvailable() {
+    if (!(window.MyPC && MyPC.drive && MyPC.apiLevel >= 14)) return false;
+    let info = null;
+    try { info = MyPC.info && MyPC.info(); } catch (e) { /* standalone, before init */ }
+    return !(info && info.bridges && info.bridges.drive === false);
+}
+
+const MESSAGES = {
+    'signed-out': ['signed_out', 'Sign in to Google Drive first.'],
+    reauth: ['reauth', 'Google needs you to sign in to Google Drive again.'],
+    denied: ['denied', 'You did not allow MyDrive to use your Google Drive.'],
+    noconfig: ['noconfig', 'Google Drive is not set up for My PC yet (App Store Manager > Google Drive).'],
+    'not-found': ['not_found', 'This file no longer exists or MyDrive cannot see it.'],
+    permission: ['permission', 'Google Drive does not allow this with this file.'],
+    quota: ['quota', 'Google Drive is busy. Try again in a minute.'],
+    'too-big': ['too_big', 'This file is too big to open here.'],
+    'bad-request': ['bad_request', ''],
+    network: ['network', 'No connection to Google Drive. Check the network and try again.'],
+    timeout: ['timeout', 'Google Drive did not answer in time. Try again.'],
+    cancelled: ['cancelled', 'Cancelled.'],
+    busy: ['busy', 'Too many things at once. Try again.'],
+    'not-running': ['cancelled', 'Cancelled.'],
+    unsupported: ['unsupported', 'This My PC is too old for Google Drive. Update My PC (Control Panel > Update).']
+};
+
+/** My PC's error ({ code, message, status }) -> MyDrive's AppError with a message for people. */
+export function driveError(e) {
+    if (e instanceof AppError) return e;
+    const code = String((e && e.code) || 'error');
+    const m = MESSAGES[code];
+    return new AppError(m ? m[0] : code.replace(/-/g, '_'), (m && m[1]) || (e && e.message) || 'Something went wrong.', (e && e.status) || 0);
+}
+
+/** A MyPC.drive call that an AbortSignal can stop, with MyDrive's errors. */
+function run(make, signal) {
+    if (signal && signal.aborted) return Promise.reject(new AppError('cancelled', 'Cancelled.'));
+    let p;
+    try { p = make(); } catch (e) { return Promise.reject(driveError(e)); }
+    const stop = () => { try { if (p.abort) p.abort(); } catch (e) { /* already done */ } };
+    if (signal) signal.addEventListener('abort', stop, { once: true });
+    return Promise.resolve(p).then(
+        (r) => { if (signal) signal.removeEventListener('abort', stop); return r; },
+        (e) => { if (signal) signal.removeEventListener('abort', stop); throw signal && signal.aborted ? new AppError('cancelled', 'Cancelled.') : driveError(e); });
 }
 
 function sortOrder(p) {
@@ -54,137 +75,58 @@ function sortOrder(p) {
     }
 }
 
-/** Google's thumbnail links end in =s<px>: ask for the size we show. */
-export function sizedThumb(link, size) { return String(link).replace(/=s\d+$/, '') + '=s' + size; }
+/** A place in MyDrive (place = { kind, id?, text? }) -> MyPC.drive.list options. */
+export function listOptions(place, prefs) {
+    const o = { orderBy: place.kind === 'recent' ? 'recency desc' : sortOrder(prefs || {}) };
+    if (place.kind === 'folder') o.folder = place.id;
+    else if (place.kind === 'search') o.search = place.text;
+    else o.place = place.kind;                                // all starred recent images videos audio documents trash
+    return o;
+}
 
 export class DriveApi {
-    constructor(accounts) { this.accounts = accounts; }
     /** Thumbnail links can be loaded by an <img> as they are (no token, no CORS check). */
     get directThumbs() { return true; }
 
-    async call(url, opts = {}, retried = false) {
-        const token = await this.accounts.token();
-        const { tries, ...o } = opts;
-        const headers = Object.assign({ Authorization: 'Bearer ' + token }, o.headers || {});
-        const r = await requestRetry(url, Object.assign({ responseType: 'json', timeout: 30000 }, o, { headers }), tries);
-        if (r.status === 401 && !retried) { this.accounts.invalidate(); return this.call(url, opts, true); }
-        if (r.status === 403 && /insufficient authentication scopes|ACCESS_TOKEN_SCOPE_INSUFFICIENT/i.test(JSON.stringify(r.body || ''))) throw this.accounts.markNoDrive();
-        if (r.status === 403 && !retried && /rateLimit/i.test(JSON.stringify(r.body || ''))) {
-            await new Promise((res) => setTimeout(res, 1500));
-            return this.call(url, opts, true);
-        }
-        if (r.status >= 200 && r.status < 300) return r;
-        throw apiError(r);
-    }
-
     async list(place, prefs, pageToken, pageSize, signal) {
-        const { q, orderBy } = placeQuery(place, prefs);
-        const p = new URLSearchParams({ q, orderBy, pageSize: String(pageSize), fields: `nextPageToken,files(${FIELDS})`, spaces: 'drive' });
-        if (pageToken) p.set('pageToken', pageToken);
-        const r = await this.call(`${API}/files?${p}`, { signal });
-        return { files: r.body.files || [], next: r.body.nextPageToken || '' };
+        const o = Object.assign(listOptions(place, prefs), { pageSize: pageSize || 100 });
+        if (pageToken) o.pageToken = pageToken;
+        const r = await run(() => MyPC.drive.list(o), signal);
+        return { files: (r && r.files) || [], next: (r && r.next) || '' };
     }
 
-    async get(id, signal) {
-        if (id === 'root') return { id: 'root', name: 'My Drive', mimeType: FOLDER, capabilities: { canAddChildren: true } };
-        return (await this.call(`${API}/files/${encodeURIComponent(id)}?fields=${encodeURIComponent(FIELDS)}`, { signal })).body;
+    get(id, signal) {
+        if (id === 'root') return Promise.resolve({ id: 'root', name: 'My Drive', mimeType: FOLDER, capabilities: { canAddChildren: true } });
+        return run(() => MyPC.drive.get(id), signal);
     }
 
-    async createFolder(name, parentId) {
-        return (await this.call(`${API}/files?fields=${encodeURIComponent(FIELDS)}`, {
-            method: 'POST', json: { name: cleanName(name), mimeType: FOLDER, parents: [parentId || 'root'] }
-        })).body;
-    }
-
-    update(id, meta, extra = '') {
-        return this.call(`${API}/files/${encodeURIComponent(id)}?fields=${encodeURIComponent(FIELDS)}${extra}`, { method: 'PATCH', json: meta })
-            .then((r) => r.body);
-    }
-    rename(id, name) { return this.update(id, { name: cleanName(name) }); }
-    setStarred(id, v) { return this.update(id, { starred: !!v }); }
-    trash(id) { return this.update(id, { trashed: true }); }
-    untrash(id) { return this.update(id, { trashed: false }); }
-    move(file, toId) {
-        const from = (file.parents || []).map(encodeURIComponent).join(',');
-        return this.update(file.id, {}, `&addParents=${encodeURIComponent(toId)}${from ? '&removeParents=' + from : ''}`);
-    }
-    async copy(file, toId) {
-        return (await this.call(`${API}/files/${encodeURIComponent(file.id)}/copy?fields=${encodeURIComponent(FIELDS)}`, {
-            method: 'POST', json: { name: file.name, parents: [toId] }
-        })).body;
-    }
+    createFolder(name, parentId) { const n = cleanName(name); return run(() => MyPC.drive.createFolder(n, parentId || 'root')); }
+    rename(id, name) { const n = cleanName(name); return run(() => MyPC.drive.rename(id, n)); }
+    setStarred(id, v) { return run(() => MyPC.drive.star(id, !!v)); }
+    trash(id) { return run(() => MyPC.drive.trash(id)); }
+    untrash(id) { return run(() => MyPC.drive.restore(id)); }
+    move(file, toId) { return run(() => MyPC.drive.move(file.id, toId)); }
+    copy(file, toId) { return run(() => MyPC.drive.copy(file.id, toId, file.name)); }
 
     /** Bytes [start, end] of a file (end inclusive). -> { buf, total, type } */
-    async range(id, start, end, signal) {
-        const r = await this.call(`${API}/files/${encodeURIComponent(id)}?alt=media&acknowledgeAbuse=false`, {
-            headers: { Range: `bytes=${start}-${end}` }, responseType: 'arraybuffer', timeout: 60000, signal
-        });
-        const cr = /\/(\d+)\s*$/.exec(r.headers['content-range'] || '');
-        return { buf: r.body, total: cr ? +cr[1] : 0, type: r.headers['content-type'] || '' };
+    range(id, start, end, signal) { return run(() => MyPC.drive.read(id, start, end), signal); }
+
+    /** A whole (small) file. -> { buf, type } */
+    download(id, signal, onProgress, max) {
+        return run(() => MyPC.drive.download(id, { onProgress, max }), signal);
     }
 
-    /** A whole (small) file, in 1 MB ranges so onProgress(0..1) can follow it. */
-    async download(id, signal, onProgress) {
-        const PIECE = 1024 * 1024;
-        let out = null, got = 0, type = '';
-        for (;;) {
-            let r;
-            try { r = await this.range(id, got, got + PIECE - 1, signal); }
-            catch (e) { if (e.code === 'range' && !got) return { buf: new ArrayBuffer(0), type }; throw e; }   // an empty file
-            type = type || r.type;
-            const piece = new Uint8Array(r.buf);
-            if (!r.total) { onProgress && onProgress(1); return { buf: r.buf, type }; }                      // the whole file came at once
-            if (!out) out = new Uint8Array(r.total);
-            out.set(piece.subarray(0, Math.max(0, Math.min(piece.length, r.total - got))), got);
-            got += piece.length;
-            onProgress && onProgress(Math.min(1, got / r.total));
-            if (got >= r.total || !piece.length) return { buf: out.buffer, type };
-        }
+    thumbnail(link, size, signal) { return run(() => MyPC.drive.thumbnail(link, size), signal); }
+
+    upload(file, parentId, onProgress, signal) {
+        const name = cleanName(file.name);
+        return run(() => MyPC.drive.upload({ name, data: file, type: file.type || 'application/octet-stream', parent: parentId || 'root' }, { onProgress }), signal);
     }
 
-    /** A Drive thumbnail fetched with the token (used when the screen cannot load Google's link itself). One try:
-     * in a browser this fails on CORS every time, so retrying only repeats the error. */
-    async thumbnail(link, size, signal) {
-        const r = await this.call(sizedThumb(link, size), { responseType: 'arraybuffer', timeout: 20000, signal, tries: 1 });
-        return { buf: r.body, type: r.headers['content-type'] || 'image/jpeg' };
+    /** An address the <video> / <audio> plays: Range pieces through sw.js (seeking works), else a blob of a small file.
+     * -> { url, mode, lastError(), close() } */
+    async stream(file, onProgress) {
+        const s = await run(() => MyPC.drive.stream(file, { worker: WORKER, onProgress, max: BLOB_MAX }));
+        return { url: s.url, mode: s.mode, close: () => s.close(), lastError: () => { const e = s.lastError && s.lastError(); return e ? driveError(e) : null; } };
     }
-
-    /** Resumable upload in 2 MB pieces (a multiple of 256 KB, as Google asks), so onProgress(0..1) moves often. */
-    async upload(file, parentId, onProgress, signal) {
-        const init = await this.call(`${UPLOAD}?uploadType=resumable&fields=${encodeURIComponent(FIELDS)}`, {
-            method: 'POST', signal,
-            headers: { 'X-Upload-Content-Type': file.type || 'application/octet-stream', 'X-Upload-Content-Length': String(file.size) },
-            json: { name: cleanName(file.name), parents: [parentId || 'root'] }
-        });
-        const session = init.headers.location;
-        if (!session) throw new AppError('upload', 'Google did not open an upload session.');
-        const CHUNK = 2 * 1024 * 1024;
-        let at = 0;
-        for (;;) {
-            const end = Math.min(file.size, at + CHUNK);
-            const token = await this.accounts.token();
-            const r = await requestRetry(session, {
-                method: 'PUT', signal, responseType: 'json', timeout: 120000,
-                headers: { Authorization: 'Bearer ' + token, 'Content-Range': `bytes ${at}-${end - 1}/${file.size || '*'}` },
-                body: file.slice(at, end)
-            });
-            if (r.status === 200 || r.status === 201) { onProgress && onProgress(1); return r.body; }
-            if (r.status !== 308) throw apiError(r);
-            const m = /bytes=0-(\d+)/.exec(r.headers.range || '');
-            at = m ? +m[1] + 1 : end;
-            onProgress && onProgress(at / file.size);
-        }
-    }
-}
-
-function apiError(r) {
-    const e = r.body && r.body.error ? r.body.error : {};
-    const reason = (e.errors && e.errors[0] && e.errors[0].reason) || '';
-    const msg = e.message || ('HTTP ' + r.status);
-    if (r.status === 401) return new AppError('reauth', 'Google refused the sign-in. Link the account again.', 401);
-    if (r.status === 403 && /insufficient|appNotAuthorized|forbidden/i.test(reason + msg)) return new AppError('permission', 'MyDrive is not allowed to do this with this file.', 403);
-    if (r.status === 403 && /quota|limit/i.test(reason)) return new AppError('quota', 'Google Drive is busy (quota). Try again in a minute.', 403);
-    if (r.status === 404) return new AppError('not_found', 'This file no longer exists or MyDrive cannot see it.', 404);
-    if (r.status === 416) return new AppError('range', 'This file cannot be streamed.', 416);
-    return new AppError('http', msg, r.status);
 }

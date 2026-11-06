@@ -1,7 +1,9 @@
 /* Turns My PC input (onInput actions + MyPC.gamepad buttons and sticks) into app commands:
  *   left right up down  (with { repeat, accel } for held directions)
- *   ok, okLong (hold OK ~0.6 s), back, menu (Start/Select), ctx (X), search (Y),
- *   prevTab / nextTab (LB / RB), pageUp / pageDown (LT / RT, right stick), zoomIn / zoomOut (RT / LT in the viewer)
+ *   ok, okLong (hold OK ~0.6 s), back, menu (+), ctx (Y, left), search (X, top),
+ *   prevTab / nextTab (L / R), pageUp / pageDown (ZL / ZR, right stick), zoomIn / zoomOut (ZR / ZL in the viewer)
+ * Buttons are named as on a Nintendo-style pad (owner rule): B bottom = OK, A right = back, X top, Y left, + = menu.
+ * The SDK names buttons by W3C position (index 2 'X' = left = Nintendo Y, index 3 'Y' = top = Nintendo X).
  * The TV remote only has arrows + OK: every command above also has an on-screen way in. */
 
 const LONG_MS = 600;

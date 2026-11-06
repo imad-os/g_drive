@@ -10,39 +10,41 @@
 <body>
 <main>
 <h1>MyDrive Privacy Policy</h1>
-<p class="meta">Effective 30 October 2026 · App: MyDrive for My PC · <a href="terms.html">Terms of Service</a></p>
+<p class="meta">Effective 6 November 2026 · App: MyDrive for My PC · <a href="terms.html">Terms of Service</a></p>
 
 <p>MyDrive is a file explorer for Google Drive that runs inside My PC on TVs, phones and computers. This policy
 explains what MyDrive accesses, where it is kept, and how you stay in control. MyDrive has no server of its own,
 no analytics, no advertising and no tracking.</p>
 
+<h2>Who signs in to Google</h2>
+<p>Since version 1.1.0 MyDrive has <b>no Google sign-in of its own</b>. You sign in to Google Drive once in My PC
+(Control Panel &gt; Google Drive, or the "Sign in to Google Drive" button in MyDrive, which opens My PC's sign-in
+screen). My PC keeps that sign-in for your My PC profile and sends every Google Drive request for MyDrive. The first
+time, My PC asks whether MyDrive may use your Google Drive; you can take that back in Control Panel &gt; Google Drive.
+MyDrive never receives a Google password, token or client secret, and it stores none.</p>
+
 <h2>What MyDrive accesses</h2>
 <ul>
-  <li><b>Your Google account's basic profile</b> (name, e-mail address and account ID), through the
-      <code>openid</code>, <code>email</code> and <code>profile</code> permissions. It is used only to show which
-      account is linked and to tell several linked accounts apart.</li>
-  <li><b>Google Drive files that MyDrive created, or that you chose for it</b>, through the
-      <code>drive.file</code> permission. MyDrive cannot see the rest of your Drive. You choose existing files on
-      the "Add files" page (Google Picker).</li>
+  <li><b>Your Google account's name, e-mail address and picture</b>, as My PC passes them on, only to show which
+      account is in use.</li>
+  <li><b>The Google Drive files My PC may open</b>: the whole Drive when you signed in to My PC with full access, or
+      only the files My PC and its apps created and the files you chose on the "Add files" page (Google Picker).</li>
   <li>For those files: names, types, sizes, dates, thumbnails and contents, to list, preview and play them; and
       the changes you ask for (create folder, rename, move, copy, star, move to Trash, restore, upload).</li>
 </ul>
 
 <h2>Where it is kept</h2>
 <ul>
-  <li><b>Sign-in credential.</b> When you link an account, Google gives MyDrive a refresh token. MyDrive saves it,
-      with your account's name, e-mail and ID, in the <b>My PC save data of your My PC profile</b>. My PC is the
-      platform MyDrive runs in. My PC keeps this save data for each profile; when your profile is a signed-in My PC
-      player account, it is synced so your linked account follows you to your other devices. Other My PC profiles
-      cannot read it. My PC may also include it in that device's backup.</li>
-  <li><b>Short-lived access tokens</b>, file lists, thumbnails and the parts of files being viewed or played are
-      kept only in memory and are gone when MyDrive closes. Nothing is written to a public place.</li>
-  <li><b>Preferences</b> (view, sort order, last folder) are saved in the same My PC save data.</li>
+  <li><b>No credentials.</b> MyDrive keeps no Google token. Accounts linked by MyDrive before version 1.1.0 are taken
+      over by My PC (same Google project), and MyDrive then deletes its own copy from your My PC save data.</li>
+  <li><b>File lists, thumbnails and the parts of files being viewed or played</b> are kept only in memory and are
+      gone when MyDrive closes. Nothing is written to a public place.</li>
+  <li><b>Preferences</b> (view, sort order, last folder) are saved in the My PC save data of your profile.</li>
 </ul>
 
 <h2>Sharing</h2>
-<p>MyDrive does not sell, rent or share your data. It talks only to Google (accounts and Drive) and, through My PC,
-to nobody else. My PC may send error reports about app failures; MyDrive never puts names, file names, tokens or
+<p>MyDrive does not sell, rent or share your data. It talks to nobody directly: My PC sends its Google Drive
+requests to Google. My PC may send error reports about app failures; MyDrive never puts names, file names, tokens or
 file contents in them.</p>
 
 <h2>Google API Services User Data Policy</h2>
@@ -54,8 +56,8 @@ is not read by humans unless you ask for help with a specific file and agree, or
 
 <h2>Your choices</h2>
 <ul>
-  <li><b>Disconnect</b> in MyDrive (Google accounts screen) deletes the saved credential and account details from
-      your My PC profile and asks Google to cancel MyDrive's access.</li>
+  <li><b>Control Panel &gt; Google Drive</b> in My PC: take back MyDrive's permission, switch the Google account or
+      sign out.</li>
   <li>You can also cancel access at any time at
       <a href="https://myaccount.google.com/permissions">myaccount.google.com/permissions</a>.</li>
   <li>Deleting your My PC profile or its data removes everything MyDrive saved there.</li>

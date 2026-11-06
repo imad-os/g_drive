@@ -1,8 +1,10 @@
 /* Everything persistent goes through MyPC.save / MyPC.load: per My PC profile, synced to the player's
  * account and therefore to every device that profile signs in on. Only this app's own keys are touched. */
 
-const K_ACCOUNTS = 'accounts';   // [{ id, email, name, picture, refreshToken, scope, addedAt, needsReauth }]
-const K_ACTIVE = 'active';       // id of the active Google account
+// Before version 1.1.0 MyDrive kept its own Google accounts here ('accounts', 'active'). My PC takes them over
+// (same Google client), then MyDrive empties them: store.forgetOldAccounts().
+const K_OLD_ACCOUNTS = 'accounts';
+const K_OLD_ACTIVE = 'active';
 const K_PREFS = 'prefs';         // { view, sort, dir, startFolder, sections... }
 
 const DEFAULT_PREFS = { view: 'grid', sort: 'name', dir: 'asc', reduceMotion: false };
@@ -14,41 +16,19 @@ function save(key, value) {
     try { MyPC.save(key, value); } catch (e) { MyPC.report(e, { where: 'save', key }); }
 }
 
-function cleanAccount(a) {
-    if (!a || typeof a !== 'object' || typeof a.id !== 'string' || !a.id) return null;
-    return {
-        id: a.id.slice(0, 64),
-        email: String(a.email || '').slice(0, 120),
-        name: String(a.name || '').slice(0, 80),
-        picture: /^https:\/\//.test(a.picture || '') ? String(a.picture).slice(0, 500) : '',
-        refreshToken: typeof a.refreshToken === 'string' ? a.refreshToken : '',
-        scope: String(a.scope || ''),
-        addedAt: +a.addedAt || 0,
-        needsReauth: !!a.needsReauth
-    };
-}
-
 export const store = {
-    accounts() {
-        const list = load(K_ACCOUNTS, []);
-        return Array.isArray(list) ? list.map(cleanAccount).filter(Boolean).slice(0, 8) : [];
+    /** Old MyDrive sign-ins (refresh tokens) still saved? */
+    hasOldAccounts() {
+        const l = load(K_OLD_ACCOUNTS, []);
+        return (Array.isArray(l) && l.length > 0) || !!load(K_OLD_ACTIVE, '');
     },
-    account(id) { return this.accounts().find((a) => a.id === id) || null; },
-    putAccount(acc) {
-        const list = this.accounts().filter((a) => a.id !== acc.id);
-        list.push(cleanAccount(acc));
-        save(K_ACCOUNTS, list);
+    /** Deletes them: only once My PC's Google Drive answered (it has taken them over by then). Prefs stay. */
+    forgetOldAccounts() {
+        if (!this.hasOldAccounts()) return false;
+        save(K_OLD_ACCOUNTS, []);
+        save(K_OLD_ACTIVE, '');
+        return true;
     },
-    patchAccount(id, patch) {
-        const acc = this.account(id);
-        if (acc) this.putAccount(Object.assign(acc, patch));
-    },
-    removeAccount(id) {
-        save(K_ACCOUNTS, this.accounts().filter((a) => a.id !== id));
-        if (this.activeId() === id) save(K_ACTIVE, '');
-    },
-    activeId() { const v = load(K_ACTIVE, ''); return typeof v === 'string' ? v : ''; },
-    setActive(id) { save(K_ACTIVE, id || ''); },
 
     prefs() {
         const p = load(K_PREFS, {});

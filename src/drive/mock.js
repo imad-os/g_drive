@@ -106,6 +106,7 @@ export class MockDrive {
         if (id === 'sub0') return { buf: enc('1\n00:00:01,000 --> 00:00:04,000\nDemo subtitle\n'), type: 'text/plain' };
         throw new AppError('demo', 'The demo has no real file data.');
     }
-    async range() { throw new AppError('demo', 'The demo has no real video data. Link a Google account to play your videos.'); }
-    async upload() { throw new AppError('demo', 'Uploading needs a linked Google account.'); }
+    async range() { throw new AppError('demo', 'The demo has no real video data. Sign in to Google Drive to play your videos.'); }
+    async stream() { return this.range(); }
+    async upload() { throw new AppError('demo', 'Uploading needs Google Drive (sign in first).'); }
 }

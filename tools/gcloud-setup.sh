@@ -6,15 +6,16 @@
 # Automated: project, Drive + Picker APIs, the Picker API key (restricted to the site and the Picker API), the project number.
 # Manual (Google has no public API for these): the consent screen + publishing, the "TVs and Limited Input devices"
 # client and the "Web application" client. The script opens the right console pages, waits for you, asks for the
-# values and prints the JSON to paste into App Store Manager > MyDrive > Config.
+# values and prints what to paste into App Store Manager > Google Drive (My PC's own Google client, used by
+# My PC's Control Panel > Google Drive, Music, MyDrive and every app through MyPC.drive).
 # Safe to run again: it reuses the project and the key it finds.
 
 set -euo pipefail
 
 PROJECT_ID="${1:-${PROJECT_ID:-}}"
-ORIGIN="https://imad-os.github.io"
+ORIGIN="https://pc.geekspro.us"            # My PC's live site: the phone pages drive-signin.html / drive-picker.html
 SITE="https://imad-os.github.io/g_drive/"
-REFERRER="${SITE}*"
+REFERRER="${ORIGIN}/*"
 KEY_NAME="MyDrive Picker"
 OUT="$HOME/mydrive-config.json"
 
@@ -90,7 +91,7 @@ cat <<EOF
      • Authorized domains → Add domain: $(b "imad-os.github.io") → $(b Save)
    Open: $(b "$C/auth/scopes?project=$PROJECT_ID")
      • Add or remove scopes → tick: openid, .../auth/userinfo.email, .../auth/userinfo.profile, .../auth/drive.file
-       → Update → $(b Save)   (do NOT add .../auth/drive)
+       and .../auth/drive (My PC's phone sign-in shows the whole Drive with it) → Update → $(b Save)
    Open: $(b "$C/auth/audience?project=$PROJECT_ID")
      • $(b "Publish app") → Confirm  (status must say "In production", else tokens expire every 7 days)
    Do not upload a logo (it starts a brand review).
@@ -111,20 +112,22 @@ cat <<EOF
 
    B) Create client again → Application type: $(b "Web application") · name: MyDrive Picker
       Authorized JavaScript origins → Add URI: $(b "$ORIGIN")   (no path, no trailing slash)
-      Leave redirect URIs empty → Create → copy the Client ID (no secret needed)
+      Authorized redirect URIs → Add URI: $(b "$ORIGIN/drive-signin.html")   (sign-in for the whole Drive)
+      Create → copy the Client ID and its Client secret (this web client's own secret, not the TV one)
 EOF
 ask WEB_ID "Web client ID" '^[0-9]+-[a-z0-9]+\.apps\.googleusercontent\.com$'
+ask WEB_SECRET "Web client secret" '^[A-Za-z0-9_-]{10,}$' hidden
 [ "$WEB_ID" != "$TV_ID" ] || die "Both client IDs are the same: B) must be a separate Web application client."
 
 # ---------------------------------------------------------------- result
-jq -n --arg tv "$TV_ID" --arg sec "$TV_SECRET" --arg web "$WEB_ID" --arg key "$API_KEY" --arg num "$PROJECT_NUMBER" \
-    '{google: {tvClientId: $tv, tvClientSecret: $sec, pickerClientId: $web, pickerApiKey: $key, projectNumber: $num}, pageSize: 100, thumbConcurrency: 4}' > "$OUT"
+jq -n --arg tv "$TV_ID" --arg sec "$TV_SECRET" --arg web "$WEB_ID" --arg wsec "$WEB_SECRET" --arg key "$API_KEY" --arg num "$PROJECT_NUMBER" \
+    '{tvClientId: $tv, tvClientSecret: $sec, pickerClientId: $web, webClientSecret: $wsec, pickerApiKey: $key, projectNumber: $num}' > "$OUT"
 chmod 600 "$OUT"
 
 step "Done"
-echo "   Paste this into $(b "https://imad-os.github.io/g/installer/") → MyDrive → Config:"
+echo "   Put these values into $(b "https://pc.geekspro.us/installer/") → Google Drive → Save:"
 echo
 cat "$OUT"
 echo
 echo "   (also saved in $OUT; delete it when pasted: rm $OUT)"
-echo "   Then on the TV: MyDrive → Link a Google account."
+echo "   Then on the TV: Control Panel → Google Drive → Sign in (or MyDrive → Sign in to Google Drive)."

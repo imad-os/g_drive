@@ -94,6 +94,7 @@ export class Explorer extends Layer {
         this.side.appendChild(h('div', { class: 'side-sep' }));
         const addFiles = h('button', { class: 'side-item', type: 'button' }, h('span', { class: 'ico', html: icon.phone }), h('span', null, 'Add files'));
         onActivate(addFiles, () => a.openAddFiles());
+        this.addFilesBtn = addFiles;          // only when My PC needs it (drive.file access: status().picker)
         const help = h('button', { class: 'side-item', type: 'button' }, h('span', { class: 'ico', html: icon.gamepad }), h('span', null, 'Controls'));
         onActivate(help, () => a.showControls());
         this.side.append(addFiles, help);
@@ -126,8 +127,9 @@ export class Explorer extends Layer {
     }
 
     refreshAccount() {
-        const acc = this.app.demo ? { name: 'Demo', email: 'demo' } : this.app.accounts.active();
+        const acc = this.app.account();
         this.accountName.textContent = acc ? (acc.name || acc.email) : 'Sign in';
+        this.addFilesBtn.hidden = !this.app.canAddFiles();
         this.demoBadge.remove();
         if (this.app.demo) this.b.account.appendChild(this.demoBadge);
     }
@@ -260,6 +262,8 @@ export class Explorer extends Layer {
             this.next = r.next;
             this.loading = false;
             this.show(files, opts.restoreId);
+            // My PC tells the account only once MyDrive is allowed (asked by My PC on the first listing): show it now
+            if (!this.app.demo && this.app.status && !this.app.status.account) this.app.checkDrive();
         } catch (e) {
             if (ctrl.signal.aborted || e.code === 'cancelled') return;
             this.loading = false;
@@ -376,11 +380,11 @@ export class Explorer extends Layer {
         if (this.error) {
             this.overlay.classList.add('on');
             const e = this.error;
-            const reauth = e.code === 'reauth' || e.code === 'signed_out';
-            const btn = h('button', { class: 'btn primary', type: 'button' }, h('span', { class: 'ico', html: reauth ? icon.link : icon.refresh }), h('span', null, reauth ? 'Link the account again' : 'Try again'));
-            onActivate(btn, () => reauth ? this.app.openAccounts() : this.refresh());
+            const reauth = e.code === 'reauth' || e.code === 'signed_out' || e.code === 'denied';
+            const btn = h('button', { class: 'btn primary', type: 'button' }, h('span', { class: 'ico', html: reauth ? icon.link : icon.refresh }), h('span', null, reauth ? (e.code === 'denied' ? 'Try again' : 'Sign in to Google Drive') : 'Try again'));
+            onActivate(btn, () => reauth ? this.app.signIn() : this.refresh());
             this.overlay.appendChild(h('div', { class: 'empty' }, h('div', { class: 'empty-ico', html: icon.info }),
-                h('h3', null, reauth ? 'Google needs you to link this account again' : e.code === 'network' || e.code === 'timeout' ? 'No connection' : 'Something went wrong'),
+                h('h3', null, e.code === 'denied' ? 'MyDrive may not use your Google Drive' : reauth ? 'Sign in to Google Drive again' : e.code === 'network' || e.code === 'timeout' ? 'No connection' : 'Something went wrong'),
                 h('p', null, e.message || String(e)), btn));
             this.focus(btn);
             return;
@@ -391,12 +395,12 @@ export class Explorer extends Layer {
             const text = {
                 trash: ['Trash is empty', 'Deleted files stay here until Google removes them after 30 days.'],
                 search: ['No results', 'Nothing MyDrive can see has this name.'],
-                starred: ['No starred files', 'Press X (or hold OK) on a file and choose Star.']
-            }[k] || (k === 'folder' && this.loc.path.length === 1 && !this.app.demo
-                ? ['Nothing here yet', 'For your privacy MyDrive only sees files it created and files you add from your phone with "Add files". Create a folder or add files to start.']
+                starred: ['No starred files', 'Press Y (or hold OK) on a file and choose Star.']
+            }[k] || (k === 'folder' && this.loc.path.length === 1 && this.app.canAddFiles()
+                ? ['Nothing here yet', 'My PC sees only the files it and its apps made, and the files you add from your phone with "Add files". Create a folder or add files to start.']
                 : ['This folder is empty', 'Use New folder or Upload to add something.']);
             const kids = [h('div', { class: 'empty-ico', html: icon.drive }), h('h3', null, text[0]), h('p', null, text[1])];
-            if (k === 'folder' && !this.app.demo) {
+            if (k === 'folder' && this.app.canAddFiles()) {
                 const add = h('button', { class: 'btn primary', type: 'button' }, h('span', { class: 'ico', html: icon.phone }), h('span', null, 'Add files from phone'));
                 onActivate(add, () => this.app.openAddFiles());
                 kids.push(add);
@@ -416,7 +420,7 @@ export class Explorer extends Layer {
     updateHints() {
         const pad = this.app.input.hasPad();
         const hints = pad
-            ? [['A', 'Open'], ['X', 'Actions'], ['Y', 'Search'], ['LB/RB', 'Sections'], ['B', 'Back']]
+            ? [['B', 'Open'], ['Y', 'Actions'], ['X', 'Search'], ['L/R', 'Sections'], ['A', 'Back'], ['+', 'Menu']]
             : [['OK', 'Open'], ['Hold OK', 'Actions'], ['◀ ▶ ▲ ▼', 'Move']];
         clear(this.statusHints);
         hints.forEach(([k, v]) => this.statusHints.append(h('span', { class: 'key' }, k), h('span', { class: 'hint' }, v)));

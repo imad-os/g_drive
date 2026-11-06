@@ -28,8 +28,15 @@ the app in the App Store Manager once GitHub Pages has published it.
 
 ## This app (MyDrive)
 
-- Built with Vite: source in `src/`, `index.html`, `picker.html`, `public/`; `npm run build` writes the site to `docs/`.
+- Built with Vite: source in `src/`, `index.html`, `public/`; `npm run build` writes the site to `docs/`.
   Commit `docs/` with every release. GitHub Pages serves **main / docs** (not main / root).
 - Version: `public/mypc-app.json` (`version` and the `icon?v=`); the build adds `?v=<version>` to every asset.
-- Google OAuth refresh tokens live in My PC save data (`MyPC.save('accounts')`) by the owner's choice; see README
-  "How sign-in and cross-device accounts work" before changing anything about tokens.
+- **Google Drive is My PC's (owner decision 2026-11-06, version 1.1.0): MyDrive uses only `MyPC.drive` (guide section 19).**
+  Never add a Google sign-in, token, client ID / secret, Picker, `MyPC.net` call to googleapis.com or Drive API code here.
+  `src/drive/api.js` adapts `MyPC.drive` to the methods the screens call (same interface as `src/drive/mock.js`, the demo).
+  Sign-in = `MyPC.drive.signIn()` (My PC's screen); switching account / signing out is in My PC (Control Panel > Google Drive).
+  "Add files" = `MyPC.drive.addFiles()`, shown only when `status().picker`. Video: `MyPC.drive.stream(file, { worker: 'sw.js' })`,
+  `public/sw.js` = only `importScripts('https://pc.geekspro.us/sdk/drive-sw.js');` (My PC's live site is https://pc.geekspro.us).
+  Pre-1.1.0 saves `accounts` / `active` are emptied once `status()` says `configured` (My PC has taken them over by then).
+- Controls and hints: A B X Y + **+** in the Nintendo places (B bottom = open / OK, A right = back, Y left = actions,
+  X top = search, L / R sections, ZL / ZR pages, + = MyDrive menu). Never A B C or "Menu".

@@ -30,10 +30,7 @@ export default defineConfig({
         cssTarget: 'chrome108',
         modulePreload: false,
         rollupOptions: {
-            input: {
-                main: resolve(__dirname, 'index.html'),
-                picker: resolve(__dirname, 'picker.html')
-            }
+            input: { main: resolve(__dirname, 'index.html') }
         }
     },
     server: { port: 5173 }

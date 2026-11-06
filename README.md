@@ -15,8 +15,8 @@ and game controllers first. Dark, Windows 11 File Explorer-inspired UI at 1920×
 | Search / sort | Name search with an on-screen keyboard (debounced live results); sort by name, date, type, size, asc / desc |
 | File operations | New folder, rename, cut + "Move here", copy + paste (files), star / unstar, move to Trash, restore from Trash, upload (computers and phones), details |
 | Images | Full-screen viewer, previous / next, fit and 4 zoom steps with panning, dimensions; originals over 20 MB or formats the browser cannot decode use Google's 1920 px rendition |
-| Video / audio | Streams with HTTP Range requests (seeking works, nothing is downloaded whole), play / pause, ±10 s / ±60 s, volume, previous / next, sidecar `.srt` / `.vtt` subtitles |
-| Accounts | Several Google accounts per My PC profile, switch, disconnect (revokes Google's grant), re-link after expiry / revocation |
+| Video / audio | Streams through My PC with HTTP Range requests (seeking works, nothing is downloaded whole), play / pause, ±10 s / ±60 s, volume, previous / next, sidecar `.srt` / `.vtt` subtitles |
+| Google account | My PC's own Google Drive sign-in (`MyPC.drive`, one account per My PC profile); MyDrive has no Google code of its own |
 | Demo | "Try the demo" runs the whole UI on local fake data (`src/drive/mock.js`), no Google account needed |
 
 ## Controls
@@ -24,167 +24,99 @@ and game controllers first. Dark, Windows 11 File Explorer-inspired UI at 1920×
 | Input | Action |
 |---|---|
 | Arrows / D-pad / left stick | Move (hold to accelerate) |
-| OK / A | Open |
-| Hold OK / X | Actions menu for the selected file |
-| Y | Search |
-| LB / RB | Previous / next section (viewer / player: previous / next file) |
-| LT / RT, right stick | Page up / down (player: −60 s / +60 s; viewer: zoom) |
-| B, Esc / Backspace | Back / close |
-| Start or Select | MyDrive menu |
+| OK / B | Open |
+| Hold OK / Y | Actions menu for the selected file |
+| X | Search |
+| L / R | Previous / next section (viewer / player: previous / next file) |
+| ZL / ZR, right stick | Page up / down (player: −60 s / +60 s; viewer: zoom) |
+| A, Esc / Backspace | Back / close |
+| + | MyDrive menu |
 | TV remote Back | My PC's pause menu (Resume / Quit) |
 
+Buttons are named as on a Nintendo-style pad (B bottom, A right, X top, Y left, + menu), as everywhere in My PC.
 Everything also has an on-screen control, so arrows + OK are enough. The status bar shows the controls that
 apply right now, and the **Controls** screen in the sidebar lists all of them.
 
-## How sign-in and cross-device accounts work
+## Google sign-in: My PC's (`MyPC.drive`)
 
-My PC runs the app in a sandboxed iframe with no pop-ups, so a normal Google sign-in window cannot open on the
-TV. MyDrive uses Google's **OAuth 2.0 for TVs and Limited-Input Devices** (device code) flow:
+Since version 1.1.0 MyDrive has **no Google sign-in, token, client ID, Picker or Drive API code of its own**. It uses
+My PC's built-in Google Drive (SDK API level 14, guide section 19):
 
-1. The TV shows a code and a QR code for `google.com/device`.
-2. The user approves on a phone or computer.
-3. Google gives the TV an access token (1 h) and a **refresh token**.
+- Each My PC profile signs in **once**, in My PC: Control Panel > Google Drive, or MyDrive's **Sign in to Google
+  Drive** button, which opens My PC's own sign-in screen (QR code + Google's page on the phone) over MyDrive.
+  The first time, My PC asks once "MyDrive wants to use your Google Drive".
+- My PC sends every Drive request for MyDrive. MyDrive only gets file objects and bytes, never a token.
+- Switching the Google account and signing out are done in My PC (Control Panel > Google Drive).
+- What MyDrive sees is what My PC may see: the **whole Drive** when My PC is set up for it (`status().full`), else
+  Google's `drive.file` (files My PC and its apps made + files picked with **Add files**, which then opens My PC's
+  own "Add files from your phone" QR screen; the button shows only when `status().picker` is true).
+- Accounts linked in MyDrive before 1.1.0 are taken over by My PC (same Google project) the first time; MyDrive
+  then empties its old `accounts` / `active` saves (no token is left in MyDrive's save data). `prefs` stay.
+- An older My PC (API level < 14) gets "Update My PC (Control Panel > Update)"; the demo still works there.
 
-**The refresh token is saved with `MyPC.save('accounts', …)`**, together with the Google account id, e-mail and
-name. My PC save data is per My PC profile and per app. When the profile is a signed-in My PC player account, the
-data is synced to the Firestore document `players/{uid}`, which only that account can read. So a profile that
-links Drive on one TV finds it linked on every TV, phone or computer it signs in on. There the app swaps the
-refresh token for a new access token. If Google rotates the refresh token, the new one is saved straight away.
-Access tokens are never saved: they stay in memory and are dropped when the app closes.
-
-Other My PC profiles get their own save data, so they never see another profile's accounts, tokens or file
-listings. In-memory caches (listings, thumbnails as `blob:` URLs) are cleared when you switch accounts or close
-the app. Disconnecting removes only MyDrive's own `accounts` entry and revokes Google's grant. No other save data
-is touched.
-
-### Security notes (read before publishing)
-
-- **My PC save data is not encrypted.** It is protected by My PC's Firestore rules: `players/{uid}` can be read
-  only by the account itself. My PC's **TV backup** (`tvs/{hash}`) also contains the saves, and anyone who knows
-  that TV's hashed id can read that document. A refresh token stored there is as safe as that backup. The
-  owner asked for this storage; a token broker with server-side storage would be stronger, but My PC's guide
-  forbids backends.
-- What a leaked refresh token exposes: only MyDrive's `drive.file` access to that account (see below). The user
-  can cancel it at any time at https://myaccount.google.com/permissions, or with **Disconnect** in MyDrive.
-- Opened directly in a browser (standalone development mode), the SDK keeps saves in `localStorage`. Use test
-  accounts there.
-- Tokens are sent only in `Authorization` headers, never in URLs. They are never logged or put in error reports.
-
-### Why `drive.file` (and what it means)
-
-Google's device flow **does not allow** the full `drive` or `drive.readonly` scopes. It allows `drive.file`, so
-MyDrive sees:
-
-- files and folders it created or uploaded, and
-- existing files and folders the user picks on their phone with **Add files**. This opens `picker.html`, a
-  Google Picker page. Picker grants belong to the Cloud project, so the TV client sees them too. Picked files
-  show up in **All files**, and in their folder if that folder was picked as well.
-
-A side benefit: `drive.file` is a non-sensitive scope. The Cloud project can be published to Production without
-Google's restricted-scope security assessment, so **refresh tokens do not expire after 7 days** as they do for
-apps in "Testing".
+`src/drive/api.js` is a thin adapter over `MyPC.drive` with the same methods as the demo (`src/drive/mock.js`).
 
 ## Google Cloud setup (store owner)
 
-**Fastest way:** open https://shell.cloud.google.com and run:
+The Google client now belongs to **My PC**, not to MyDrive: it is entered once in the App Store Manager >
+**Google Drive** (Firestore `settings/google`) and used by Control Panel > Google Drive, Music, MyDrive and every
+app. MyDrive's own `config` needs no `google` any more (an old `google` there is only read by My PCs that have no
+`settings/google` yet).
+
+[`tools/gcloud-setup.sh`](tools/gcloud-setup.sh) can still create the Google project for you. Open
+https://shell.cloud.google.com and run:
 
 ```bash
 bash <(curl -sSL https://raw.githubusercontent.com/imad-os/g_drive/main/tools/gcloud-setup.sh)
 ```
 
-[`tools/gcloud-setup.sh`](tools/gcloud-setup.sh) creates the project, enables the APIs, makes the restricted
-Picker API key and reads the project number. Google has no public API for the consent screen or for
-OAuth clients, so the script opens those console pages, says exactly what to click, asks for the IDs, and
-then prints the finished Config JSON. You can run it again safely: pass an existing project id as the first
-argument to reuse that project.
-
-The manual steps it walks you through are the same as these:
-
-1. Create a project at https://console.cloud.google.com and enable the **Google Drive API** and the
-   **Google Picker API**.
-2. **OAuth consent screen** (Google Auth Platform): External. In **Branding**, set the home page
-   `https://imad-os.github.io/g_drive/`, the privacy policy `https://imad-os.github.io/g_drive/privacy.html`,
-   the terms of service `https://imad-os.github.io/g_drive/terms.html`, and the authorized domain
-   `imad-os.github.io`. The two pages are in `public/` (edit the contact link if you want another one). Add the scopes `openid`, `email`, `profile` and
-   `.../auth/drive.file`. Add a privacy policy link. Then **Publish app** (Production). While the app is in
-   "Testing", refresh tokens expire after 7 days and users must link their account again.
-3. **Credentials → Create OAuth client ID → "TVs and Limited Input devices".** Keep its client ID and secret.
-   Google treats this client's secret as non-confidential (installed apps), which is why the device flow needs it.
-4. For **Add files**: create OAuth client ID → **Web application** with the authorized JavaScript origin
-   `https://imad-os.github.io`. Then create an **API key** limited to the Google Picker API and to the HTTP
-   referrer `https://imad-os.github.io/g_drive/*`. Note the **project number** (Project settings).
-5. In the **App Store Manager → MyDrive → Config**, set:
-
-```json
-{
-  "google": {
-    "tvClientId": "123-abc.apps.googleusercontent.com",
-    "tvClientSecret": "GOCSPX-…",
-    "pickerClientId": "123-web.apps.googleusercontent.com",
-    "pickerApiKey": "AIza…",
-    "projectNumber": "123456789012"
-  },
-  "pageSize": 100,
-  "thumbConcurrency": 4
-}
-```
-
-Nothing secret or personal is committed to this repository. These values live only in the app config.
+It enables the Drive and Picker APIs, makes the Picker API key limited to the referrer `https://pc.geekspro.us/*`
+(My PC's live site, where its phone pages are), walks you through the consent screen and the two OAuth clients
+(a "TVs and Limited Input devices" client, and a "Web application" client with the origin `https://pc.geekspro.us`
+and the redirect URI `https://pc.geekspro.us/drive-signin.html`), then prints the values to paste into
+App Store Manager > Google Drive.
 
 ## Video playback
 
-A `<video>` element cannot send the `Authorization` header, and Drive does not accept tokens in URLs. MyDrive
-registers a service worker (`public/sw.js`). The player points the video at `./mydrive-stream/<random id>`. The
-worker answers each Range request with a 206 piece of at most 2 MB, which the page downloads from
-`files.get?alt=media` through `MyPC.net` with the header. Seeking works, memory stays small, and nothing is
-cached.
+A `<video>` element cannot send Google's `Authorization` header, and MyDrive has no token anyway.
+`public/sw.js` contains only `importScripts('https://pc.geekspro.us/sdk/drive-sw.js');` (My PC's streaming
+worker). The player calls `MyPC.drive.stream(file, { worker: 'sw.js' })` and plays the address it returns: the
+worker answers each Range request with a 206 piece of at most 2 MB, read through My PC. Seeking works, memory
+stays small, and nothing is cached. `close()` ends the address when the player leaves the file.
 
 - Plays natively: MP4 (H.264 / AAC), WebM (VP8 / VP9), MP3, M4A / AAC, and OGG where the browser supports it.
   Samsung TVs often also play MKV and HEVC in hardware; MyDrive tries, then shows a clear message if it fails.
 - Needs converting on a computer (MyDrive does no transcoding): AVI, WMV, FLV, and codecs the screen lacks.
-- Without service workers, files up to 64 MB are loaded whole as a fallback. Larger files show an explanation.
+- Without service workers, My PC downloads files up to 64 MB whole as a fallback. Larger files show an explanation.
 
 ## Project layout
 
 ```
-index.html, picker.html        entry pages (the SDK <script> comes first)
-public/                        mypc-app.json, icon.svg, sw.js, .nojekyll (copied as-is)
-src/main.js                    My PC lifecycle (init / start / pause / resume / destroy) and app glue
-src/config.js                  owner config (MyPC.app_config) + OAuth scopes
-src/store.js                   MyPC.save / load: accounts, active account, preferences
-src/net.js                     MyPC.net wrapper: retries, cancellation, concurrency limiter
-src/auth/oauth.js              device flow, refresh, revoke
-src/auth/accounts.js           per-profile accounts, in-memory access tokens
-src/drive/api.js               Drive API v3 (list, get, create, rename, move, copy, star, trash, ranges, upload)
+index.html                     entry page (the SDK <script> comes first)
+public/                        mypc-app.json, icon.svg, sw.js (My PC's drive-sw.js), privacy / terms pages
+src/main.js                    My PC lifecycle (init / start / pause / resume / destroy), Google Drive status, app glue
+src/config.js                  owner config (MyPC.app_config): pageSize, thumbConcurrency
+src/store.js                   MyPC.save / load: preferences (and removal of the pre-1.1.0 accounts)
+src/net.js                     AppError + concurrency limiter
+src/drive/api.js               adapter over MyPC.drive (list, get, create, rename, move, copy, star, trash, read, upload, stream)
 src/drive/mock.js              demo data, same interface as api.js
 src/media/thumbs.js            lazy, rate-limited, LRU thumbnails
-src/media/stream.js            page side of the streaming worker
-src/ui/*                       focus system, explorer, virtual grid, dialogs, on-screen keyboard, viewer, player, accounts
-src/picker.js                  phone page: Google Picker for "Add files"
+src/ui/*                       focus system, explorer, virtual grid, dialogs, on-screen keyboard, viewer, player, Google Drive screen
 docs/                          build output served by GitHub Pages
 ```
 
 ## Test without My PC (standalone)
 
 Open the site directly in a desktop browser, for example `https://imad-os.github.io/g_drive/` or
-`http://localhost:5173` with `npm run dev`. On the welcome screen (or in the MyDrive menu: Start / Select) choose
-**Test config…** and paste **the same JSON as App Store Manager > MyDrive > Config**. Press **Save and reload**
-and **Link a Google account** uses it.
-
-- The pasted config is kept only in this browser (`localStorage`, key `mydrive_test_config`), and the button
-  only appears outside My PC. Inside My PC, the App Store config is always the one used.
-- An `?app_config={...}` in the address wins over the saved test config.
-- Outside My PC the SDK keeps saves (including linked accounts and their refresh tokens) in this browser's
-  `localStorage`, not in a My PC profile. Use a test Google account, and **Disconnect** when you are done.
-- In a browser, `MyPC.net` only reaches sites that allow cross-origin requests. Google's sign-in and Drive APIs
-  do. If thumbnails fail in a browser but work on the TV, this is the reason.
-- **Remove test config** in the same dialog goes back to no config.
+`http://localhost:5173` with `npm run dev`. The SDK then runs My PC's own Drive code in the page with the Google
+client of every My PC (`settings/google`), shows a plain sign-in box, and keeps the account in this browser's
+`localStorage` (`mypc_drive`). Use a test Google account. `?demo=1` opens the demo.
 
 ## Develop, build, publish
 
 ```bash
 npm install
-npm run dev          # http://localhost:5173 (?demo=1 for the demo, ?app_config={...} to test a config)
+npm run dev          # http://localhost:5173 (?demo=1 for the demo)
 npm run build        # -> docs/ (Chrome 108 target, every asset gets ?v=<version>)
 ```
 
@@ -195,21 +127,9 @@ GitHub Pages: **Settings → Pages → Deploy from a branch → `main` / `/docs`
 
 ## Test status
 
-Verified in a desktop browser in standalone mode, using the demo data and a fake Google client:
-
-- the UI at 16:9 and 4:3
-- arrow / Enter / Backspace navigation between sidebar, command bar and grid
-- folders, the image viewer, the on-screen keyboard and live search
-- the accounts screen and the device-flow error path (a real `oauth2.googleapis.com` round trip through `MyPC.net`)
-- the streaming worker's 206 Range answers
-
-**Not yet tested** (no TV, Google client or second device was available):
-
-- a real Google account
-- real video playback from Drive
-- a Samsung TV with Tizen
-- game controllers
-- the cross-device scenarios (link on device 1 → restored on device 2, profile isolation, expired / revoked
-  tokens)
-
-Run them after the Google Cloud setup above.
+1.1.0 was tested inside My PC (the real shell, MyDrive installed from the App Store, Chromium, a fake Google
+behind My PC): welcome screen, My PC's sign-in screen over MyDrive, listing My Drive, opening a folder, playing a
+WebM video through `sw.js` and seeking to 0:30 (a Range read from the middle of the file), rename and new folder
+with the on-screen keyboard, upload, move to Trash, the Controls screen, the "not set up" message, and an account
+linked in old MyDrive being taken over by My PC (permission asked once, old tokens removed). MyDrive itself sent
+no request to Google. Not yet tested on a Samsung TV with a real Google account.
