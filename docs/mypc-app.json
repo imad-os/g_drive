@@ -2,10 +2,10 @@
   "mypc": 1,
   "id": "mydrive",
   "name": "MyDrive",
-  "description": "Browse, view and play your Google Drive files with a TV remote or a game controller.",
+  "description": "Browse, view and play your Google Drive files with a TV remote or a game controller, and copy them to and from USB drives on the TV.",
   "type": "app",
   "entry": "index.html",
-  "icon": "icon.svg?v=1.1.0",
-  "version": "1.1.0",
+  "icon": "icon.svg?v=1.2.0",
+  "version": "1.2.0",
   "config": {}
 }

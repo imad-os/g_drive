@@ -106,3 +106,5 @@ button:focus { outline: none; }
 .transfer-name { font-size: 1.15rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .transfer-info { font-size: 1rem; color: var(--text2); font-variant-numeric: tabular-nums; }
 @media (max-aspect-ratio: 4/3) { .transfers { left: 1rem; right: 1rem; } .transfer { width: auto; } }
+
+[hidden] { display: none !important; }

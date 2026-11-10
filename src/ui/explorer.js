@@ -10,6 +10,7 @@ import { typeText } from './osk.js';
 import { transferCard, progressText } from './progress.js';
 import { FOLDER } from '../drive/api.js';
 import { store } from '../store.js';
+import { copyFlow, jobRunning } from './copies.js';
 
 const SECTIONS = [
     { kind: 'folder', id: 'root', label: 'My Drive', icon: icon.drive },
@@ -22,8 +23,13 @@ const SECTIONS = [
     { kind: 'documents', label: 'Documents', icon: icon.doc },
     { kind: 'trash', label: 'Trash', icon: icon.trash }
 ];
+// the TV's USB drives (My PC's MyPC.usb, API 16): place { kind: 'usbroot' } = the drives, { kind: 'usb', id: path } = a folder on one
+const USB = { kind: 'usbroot', label: 'USB drives', icon: icon.usb };
 const CACHE_MS = 120000;
-const sectionOf = (place) => SECTIONS.find((s) => s.kind === place.kind && (s.kind !== 'folder' || place.root)) || null;
+const isUsb = (place) => !!place && (place.kind === 'usb' || place.kind === 'usbroot');
+const sectionOf = (place) => isUsb(place) ? USB : SECTIONS.find((s) => s.kind === place.kind && (s.kind !== 'folder' || place.root)) || null;
+/** A folder place of the same world as `place` (Drive folder or USB folder). */
+const folderPlace = (usb, id) => usb ? { kind: 'usb', id } : { kind: 'folder', id, root: id === 'root' };
 const isPlayable = (f) => /^(video|audio)\//.test(f.mimeType);
 const isImage = (f) => /^image\//.test(f.mimeType);
 
@@ -71,17 +77,21 @@ export class Explorer extends Layer {
             details: this.btn(icon.info, 'Details', () => this.details()),
             sort: this.btn(icon.sort, 'Sort', () => this.chooseSort()),
             view: this.btn(icon.view, 'View', () => this.chooseView()),
+            xfer: this.btn(icon.usb, 'Copy to USB', () => this.transfer()),
             more: this.btn(icon.more, '', () => this.contextMenu(), 'icon-only')
         };
+        this.b.xfer.hidden = !a.usbOk;
+        // a TV (USB drives = a TV) has no file chooser, so no Upload there: room for "Copy to USB" in the command bar
+        this.b.upload.hidden = a.usbOk;
         this.b.back.setAttribute('aria-label', 'Back'); this.b.fwd.setAttribute('aria-label', 'Forward');
         this.b.up.setAttribute('aria-label', 'Up'); this.b.refresh.setAttribute('aria-label', 'Refresh'); this.b.more.setAttribute('aria-label', 'More actions');
         this.crumbs = h('div', { class: 'crumbs' });
         this.accountName = h('span', { class: 'account-name' });
         this.b.account.appendChild(this.accountName);
         const B = this.b;
-        const address = h('div', { class: 'addressbar' }, B.back, B.fwd, B.up, B.refresh, h('div', { class: 'crumb-box' }, h('span', { class: 'crumb-ico', html: icon.drive }), this.crumbs), B.search, B.account);
+        const address = h('div', { class: 'addressbar' }, B.back, B.fwd, B.up, B.refresh, h('div', { class: 'crumb-box' }, this.crumbIco = h('span', { class: 'crumb-ico', html: icon.drive }), this.crumbs), B.search, B.account);
         const sep = () => h('span', { class: 'cmd-sep' });
-        const cmdbar = h('div', { class: 'cmdbar' }, B.newFolder, B.upload, sep(), B.cut, B.copy, B.paste, sep(), B.rename, B.star, B.del, B.details, sep(), B.sort, B.view, B.more);
+        const cmdbar = h('div', { class: 'cmdbar' }, B.newFolder, B.upload, sep(), B.cut, B.copy, B.paste, sep(), B.rename, B.star, B.del, B.details, B.xfer, sep(), B.sort, B.view, B.more);
 
         this.side = h('nav', { class: 'sidebar', 'data-scroll': '' });
         this.sideItems = SECTIONS.map((s) => {
@@ -91,6 +101,20 @@ export class Explorer extends Layer {
             this.side.appendChild(it);
             return it;
         });
+        // USB drives (only on a TV whose My PC has them) and the copies My PC makes
+        const usb = h('button', { class: 'side-item', type: 'button' }, h('span', { class: 'ico', html: icon.usb }), h('span', null, USB.label));
+        onActivate(usb, () => a.usbOk ? this.navigate({ kind: 'usbroot' }, []) : this.usbUpdateNote());
+        usb._section = USB;
+        usb.hidden = !a.usbOk && !a.usbOld;
+        this.sideItems.push(usb);
+        this.side.appendChild(usb);
+        this.copiesBadge = h('span', { class: 'side-badge', hidden: true });
+        const copies = h('button', { class: 'side-item', type: 'button' }, h('span', { class: 'ico', html: icon.copy }), h('span', null, 'Copies'), this.copiesBadge);
+        onActivate(copies, () => a.openCopies());
+        copies.hidden = !a.usbOk;
+        this.side.appendChild(copies);
+        this.jobEnds = new Map();
+        this.offJobs = a.watchJobs((j) => this.onJob(j));
         this.side.appendChild(h('div', { class: 'side-sep' }));
         const addFiles = h('button', { class: 'side-item', type: 'button' }, h('span', { class: 'ico', html: icon.phone }), h('span', null, 'Add files'));
         onActivate(addFiles, () => a.openAddFiles());
@@ -121,7 +145,7 @@ export class Explorer extends Layer {
         this.refreshAccount();
         const last = this.prefs.last;
         const acc = this.app.accountKey();
-        if (last && last.acc === acc && last.place && last.place.kind !== 'search') this.navigate(last.place, last.path || [], { noHistory: true, restoreId: last.sel });
+        if (last && last.acc === acc && last.place && last.place.kind !== 'search' && !isUsb(last.place)) this.navigate(last.place, last.path || [], { noHistory: true, restoreId: last.sel });
         else this.navigate({ kind: 'folder', id: 'root', root: true }, [{ id: 'root', name: 'My Drive' }], { noHistory: true });
         this.focus(this.grid.el);
     }
@@ -130,6 +154,7 @@ export class Explorer extends Layer {
         const acc = this.app.account();
         this.accountName.textContent = acc ? (acc.name || acc.email) : 'Sign in';
         this.addFilesBtn.hidden = !this.app.canAddFiles();
+        this.updateBadge();
         this.demoBadge.remove();
         if (this.app.demo) this.b.account.appendChild(this.demoBadge);
     }
@@ -188,14 +213,36 @@ export class Explorer extends Layer {
         if (this.loc && this.loc.place.kind === 'search') { this.goBack(); return true; }
         if (!this.inGrid() && this.grid.files.length) { this.focus(this.grid.el); return true; }
         if (this.history.length) { this.goBack(); return true; }
-        if (this.loc && this.loc.place.kind === 'folder' && this.loc.path.length > 1) { this.goUp(); return true; }
+        if (this.loc && this.canGoUp()) { this.goUp(); return true; }
         return true;
     }
 
+    /** A copy ended: the folder lists may have new files (the destination shows them at once). */
+    onJob(j) {
+        this.updateBadge();
+        if (!j || this.jobEnds.get(j.id) === j.state) return;
+        this.jobEnds.set(j.id, j.state);
+        if (j.state !== 'done' && j.state !== 'failed' && j.state !== 'cancelled') return;
+        this.cache.clear();
+        const p = this.loc && this.loc.place, d = j.dest || {};
+        if (p && this.stack && ((p.kind === 'usb' && p.id === d.path) || (p.kind === 'folder' && p.id === (d.id || 'root')))) this.refresh();
+    }
+
+    updateBadge() {
+        const n = this.app.jobList().filter(jobRunning).length;
+        this.copiesBadge.hidden = !n;
+        this.copiesBadge.textContent = n ? String(n) : '';
+    }
+
+    usbUpdateNote() {
+        infoBox(this.app.stack, { title: 'USB drives', rows: [['', 'My PC on this TV is too old for USB drives. Restart My PC to get its update (Control Panel > My PC Update), then open MyDrive again.']] });
+    }
+
     cycleSection(d) {
-        const cur = this.sideItems.findIndex((it) => it.classList.contains('active'));
-        const i = (cur < 0 ? 0 : cur + d + SECTIONS.length) % SECTIONS.length;
-        this.activate(this.sideItems[i]);
+        const list = this.sideItems.filter((it) => !it.hidden && (it._section !== USB || this.app.usbOk));
+        const at = list.findIndex((it) => it.classList.contains('active'));
+        const i = (at < 0 ? 0 : at + d + list.length) % list.length;
+        this.activate(list[i]);
     }
 
     /* ---------------- navigation ---------------- */
@@ -228,12 +275,17 @@ export class Explorer extends Layer {
         this.load({ restoreId: s.sel });
         this.renderChrome();
     }
+    canGoUp() {
+        const { place, path } = this.loc;
+        return (place.kind === 'folder' && path.length > 1) || place.kind === 'usb';
+    }
     goUp() {
-        const p = this.loc && this.loc.path;
-        if (!p || p.length < 2 || this.loc.place.kind !== 'folder') return;
+        if (!this.loc || !this.canGoUp()) return;
+        const p = this.loc.path;
         const child = p[p.length - 1].id;
+        if (this.loc.place.kind === 'usb' && p.length < 2) { this.navigate({ kind: 'usbroot' }, [], { restoreId: child }); return; }
         const parent = p[p.length - 2];
-        this.navigate({ kind: 'folder', id: parent.id, root: parent.id === 'root' }, p.slice(0, -1), { restoreId: child });
+        this.navigate(folderPlace(this.loc.place.kind === 'usb', parent.id), p.slice(0, -1), { restoreId: child });
     }
     refresh() { this.cache.clear(); this.load({ restoreId: this.grid.current() && this.grid.current().id, force: true }); }
 
@@ -243,7 +295,7 @@ export class Explorer extends Layer {
         this.app.thumbs.cancelPending();
         const ctrl = this.loadCtrl = new AbortController();
         const key = this.cacheKey(place);
-        const hit = !opts.force && this.cache.get(key);
+        const hit = !opts.force && !isUsb(place) && this.cache.get(key);      // USB folders: always read again (local, fast; copies add files)
         this.error = null;
         if (hit && Date.now() - hit.at < CACHE_MS) {
             this.next = hit.next;
@@ -255,15 +307,15 @@ export class Explorer extends Layer {
         this.renderOverlay();
         this.renderStatus();
         try {
-            const r = await this.app.source.list(place, this.prefs, '', this.app.cfg.pageSize, ctrl.signal);
+            const r = await (isUsb(place) ? this.app.usb : this.app.source).list(place, this.prefs, '', this.app.cfg.pageSize, ctrl.signal);
             if (ctrl.signal.aborted) return;
-            const files = this.sortLocal(r.files);
+            const files = isUsb(place) ? this.sortUsb(r.files) : this.sortLocal(r.files);
             this.cache.set(key, { files, next: r.next, at: Date.now() });
             this.next = r.next;
             this.loading = false;
             this.show(files, opts.restoreId);
             // My PC tells the account only once MyDrive is allowed (asked by My PC on the first listing): show it now
-            if (!this.app.demo && this.app.status && !this.app.status.account) this.app.checkDrive();
+            if (!isUsb(place) && !this.app.demo && this.app.status && !this.app.status.account) this.app.checkDrive();
         } catch (e) {
             if (ctrl.signal.aborted || e.code === 'cancelled') return;
             this.loading = false;
@@ -300,6 +352,14 @@ export class Explorer extends Layer {
             || dir * typeLabel(a).localeCompare(typeLabel(b)) || a.name.localeCompare(b.name));
     }
 
+    /** USB folders come unsorted: folders first, then by name / type / size. */
+    sortUsb(files) {
+        const dir = this.prefs.dir === 'desc' ? -1 : 1, by = this.prefs.sort;
+        return files.slice().sort((a, b) => ((b.mimeType === FOLDER) - (a.mimeType === FOLDER))
+            || (by === 'size' ? dir * ((+a.size || 0) - (+b.size || 0)) : by === 'type' ? dir * typeLabel(a).localeCompare(typeLabel(b)) : 0)
+            || dir * a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }));
+    }
+
     show(files, restoreId) {
         const i = restoreId ? files.findIndex((f) => f.id === restoreId) : -1;
         this.grid.setFiles(files, !!this.next);
@@ -317,7 +377,9 @@ export class Explorer extends Layer {
         const { place, path } = this.loc;
         clear(this.crumbs);
         const sec = sectionOf(place);
+        const usb = isUsb(place);
         const parts = place.kind === 'folder' ? path
+            : usb ? [{ label: USB.label, usbroot: true }].concat(path)
             : place.kind === 'search' ? [{ label: 'Search: "' + place.text + '"' }]
             : [{ label: sec ? sec.label : place.kind }];
         // long paths: the first crumb, an ellipsis, and the last three
@@ -327,16 +389,18 @@ export class Explorer extends Layer {
             if (p.ellipsis) { this.crumbs.appendChild(h('span', { class: 'crumb dim' }, '…')); return; }
             const last = i === shown.length - 1;
             const c = h('button', { class: 'crumb' + (last ? ' last' : ''), type: 'button' }, p.name || p.label);
-            if (p.id && !last) {
+            if (p.usbroot && !last) onActivate(c, () => this.navigate({ kind: 'usbroot' }, []));
+            else if (p.id && !last) {
                 const k = path.findIndex((x) => x.id === p.id);
-                onActivate(c, () => this.navigate({ kind: 'folder', id: p.id, root: p.id === 'root' }, path.slice(0, k + 1)));
+                onActivate(c, () => this.navigate(folderPlace(usb, p.id), path.slice(0, k + 1)));
             } else c.tabIndex = -1;
             this.crumbs.appendChild(c);
         });
         this.sideItems.forEach((it) => it.classList.toggle('active', !!sec && it._section === sec));
         this.b.back.disabled = !this.history.length;
         this.b.fwd.disabled = !this.future.length;
-        this.b.up.disabled = !(place.kind === 'folder' && path.length > 1);
+        this.b.up.disabled = !this.canGoUp();
+        this.crumbIco.innerHTML = usb ? icon.usb : icon.drive;
         this.b.search.lastChild.textContent = place.kind === 'search' ? place.text : 'Search';
         this.updateCommands();
     }
@@ -349,8 +413,19 @@ export class Explorer extends Layer {
         const trash = kind === 'trash';
         const cap = (f && f.capabilities) || {};
         const B = this.b;
+        const usb = isUsb(this.loc.place);
+        B.xfer.disabled = !f || trash || this.app.demo || !this.app.signedIn();
+        B.xfer.lastChild.textContent = usb ? 'Copy to Drive' : 'Copy to USB';
+        B.xfer.querySelector('.ico').innerHTML = usb ? icon.drive : icon.usb;
+        if (usb) {
+            B.newFolder.disabled = kind !== 'usb';
+            [B.upload, B.cut, B.copy, B.paste, B.rename, B.star, B.del].forEach((b) => { b.disabled = true; });
+            B.details.disabled = !f;
+            if (this.current && this.current.disabled) this.focus(this.grid.files.length ? this.grid.el : this.b.search);
+            return;
+        }
         B.newFolder.disabled = !inFolder;
-        B.upload.disabled = !inFolder;
+        B.upload.disabled = !inFolder || B.upload.hidden;
         B.cut.disabled = !f || trash || cap.canMoveItemWithinDrive === false;
         B.copy.disabled = !f || trash || f.mimeType === FOLDER || cap.canCopy === false;
         B.paste.disabled = !this.clip || !inFolder;
@@ -377,6 +452,17 @@ export class Explorer extends Layer {
             this.overlay.appendChild(sk);
             return;
         }
+        if (this.error && isUsb(this.loc.place)) {
+            this.overlay.classList.add('on');
+            const e = this.error;
+            const btn = h('button', { class: 'btn primary', type: 'button' }, h('span', { class: 'ico', html: icon.refresh }), h('span', null, 'Try again'));
+            onActivate(btn, () => e.code === 'not_found' || e.code === 'gone' ? this.navigate({ kind: 'usbroot' }, []) : this.refresh());
+            this.overlay.appendChild(h('div', { class: 'empty' }, h('div', { class: 'empty-ico', html: icon.usb }),
+                h('h3', null, e.code === 'denied' ? 'MyDrive may not use the USB drives' : e.code === 'not_found' || e.code === 'gone' ? 'The USB drive is not there' : 'The USB drive cannot be read'),
+                h('p', null, e.code === 'denied' ? 'You said no to "MyDrive wants to use your USB drives". Close MyDrive and open it again to be asked again.' : e.message || String(e)), btn));
+            this.focus(btn);
+            return;
+        }
         if (this.error) {
             this.overlay.classList.add('on');
             const e = this.error;
@@ -392,6 +478,18 @@ export class Explorer extends Layer {
         if (!this.grid.files.length) {
             this.overlay.classList.add('on');
             const k = this.loc.place.kind;
+            if (k === 'usbroot') {
+                const again = h('button', { class: 'btn primary', type: 'button' }, h('span', { class: 'ico', html: icon.refresh }), h('span', null, 'Look again'));
+                onActivate(again, () => this.refresh());
+                this.overlay.appendChild(h('div', { class: 'empty' }, h('div', { class: 'empty-ico', html: icon.usb }), h('h3', null, 'Plug a USB drive into the TV'),
+                    h('p', null, 'Then choose Look again. MyDrive can copy files and folders between it and your Google Drive.'), again));
+                return;
+            }
+            if (k === 'usb') {
+                this.overlay.appendChild(h('div', { class: 'empty' }, h('div', { class: 'empty-ico', html: icon.usb }), h('h3', null, 'This folder is empty'),
+                    h('p', null, 'Copy files here from Google Drive: hold OK (or Y) on a file there and choose "Copy to USB drive".')));
+                return;
+            }
             const text = {
                 trash: ['Trash is empty', 'Deleted files stay here until Google removes them after 30 days.'],
                 search: ['No results', 'Nothing MyDrive can see has this name.'],
@@ -412,7 +510,8 @@ export class Explorer extends Layer {
     renderStatus() {
         if (!this.loc) return;
         const n = this.grid.files.length;
-        const where = this.loc.place.kind === 'folder' ? this.loc.path.map((p) => p.name).join(' › ') : (sectionOf(this.loc.place) || { label: 'Search' }).label;
+        const k = this.loc.place.kind;
+        const where = k === 'folder' || k === 'usb' ? this.loc.path.map((p) => p.name).join(' › ') : (sectionOf(this.loc.place) || { label: 'Search' }).label;
         this.statusLeft.textContent = `${where}   ·   ${n}${this.next ? '+' : ''} item${n === 1 ? '' : 's'}${this.loading ? '   ·   Loading…' : ''}${this.clip ? `   ·   ${this.clip.mode === 'cut' ? 'Moving' : 'Copying'} "${this.clip.file.name}"` : ''}`;
         this.updateHints();
     }
@@ -430,6 +529,13 @@ export class Explorer extends Layer {
 
     open(f, i) {
         if (!f) return;
+        if (f.usb) {
+            if (f.mimeType === FOLDER) {
+                const path = this.loc.place.kind === 'usb' ? this.loc.path.concat({ id: f.path, name: f.name }) : [{ id: f.path, name: f.name }];
+                this.navigate({ kind: 'usb', id: f.path }, path);
+            } else this.details('MyDrive shows the files of your Google Drive. It can copy this file to Google Drive: choose "Copy to Google Drive".');
+            return;
+        }
         if (f.mimeType === FOLDER) {
             const path = this.loc.place.kind === 'folder' ? this.loc.path.concat({ id: f.id, name: f.name }) : [{ id: 'root', name: 'My Drive' }, { id: f.id, name: f.name }];
             this.navigate({ kind: 'folder', id: f.id }, path);
@@ -457,13 +563,20 @@ export class Explorer extends Layer {
         const f = this.grid.current();
         const B = this.b;
         const items = [];
-        const add = (b, id, ic, extra = {}) => items.push(Object.assign({ id, label: b.lastChild.textContent, icon: ic, disabled: b.disabled }, extra));
+        const onUsb = isUsb(this.loc.place);
+        const add = (b, id, ic, extra = {}) => !b.hidden && !(onUsb && b.disabled && id !== 'details' && id !== 'newFolder') && items.push(Object.assign({ id, label: b.lastChild.textContent, icon: ic, disabled: b.disabled }, extra));
         if (f && this.inGrid()) items.push({ id: 'open', label: f.mimeType === FOLDER ? 'Open' : 'Open / preview', icon: icon.forward });
         add(B.cut, 'cut', icon.cut); add(B.copy, 'copy', icon.copy, { why: f && f.mimeType === FOLDER ? 'Google Drive cannot copy folders' : '' });
         add(B.paste, 'paste', icon.paste);
         add(B.rename, 'rename', icon.rename); add(B.star, 'star', f && f.starred ? icon.starFill : icon.star);
         add(B.del, 'del', this.loc.place.kind === 'trash' ? icon.restore : icon.trash, { danger: this.loc.place.kind !== 'trash' });
         add(B.details, 'details', icon.info);
+        if (this.app.usbOk) {
+            const usb = isUsb(this.loc.place);
+            items.push({ id: 'xfer', label: usb ? 'Copy to Google Drive' : 'Copy to USB drive', icon: usb ? icon.drive : icon.usb, disabled: B.xfer.disabled,
+                why: B.xfer.disabled && f && !this.app.signedIn() ? 'Sign in to Google Drive first' : '' });
+            items.push({ id: 'copies', label: 'Copies', icon: icon.copy });
+        }
         items.push({ sep: true });
         add(B.newFolder, 'newFolder', icon.newFolder); add(B.upload, 'upload', icon.upload);
         items.push({ id: 'refresh', label: 'Refresh', icon: icon.refresh }, { id: 'sort', label: 'Sort by…', icon: icon.sort }, { id: 'view', label: 'View…', icon: icon.view });
@@ -471,7 +584,7 @@ export class Explorer extends Layer {
             if (!id) return;
             const map = { open: () => this.open(f, this.grid.index), cut: () => this.setClip('cut'), copy: () => this.setClip('copy'), paste: () => this.paste(),
                 rename: () => this.rename(), star: () => this.toggleStar(), del: () => this.trashOrRestore(), details: () => this.details(),
-                newFolder: () => this.newFolder(), upload: () => this.upload(), refresh: () => this.refresh(), sort: () => this.chooseSort(), view: () => this.chooseView() };
+                xfer: () => this.transfer(), copies: () => this.app.openCopies(), newFolder: () => this.newFolder(), upload: () => this.upload(), refresh: () => this.refresh(), sort: () => this.chooseSort(), view: () => this.chooseView() };
             if (map[id]) map[id]();
         });
     }
@@ -481,7 +594,8 @@ export class Explorer extends Layer {
         const name = await typeText(this.app.stack, { title: 'New folder', value: 'New folder', ok: 'Create' });
         if (name == null) return;
         const parent = this.loc.place.id;
-        const f = await this.run('Creating folder', () => this.app.source.createFolder(name, parent));
+        const usb = this.loc.place.kind === 'usb';
+        const f = await this.run('Creating folder', () => usb ? this.app.usb.createFolder(name, parent) : this.app.source.createFolder(name, parent));
         if (f) { toast('Folder "' + f.name + '" created'); this.afterChange(f.id); }
     }
 
@@ -544,6 +658,13 @@ export class Explorer extends Layer {
         }
     }
 
+    /** "Copy to USB drive" (Drive places) / "Copy to Google Drive" (USB places): My PC copies (see copies.js). */
+    transfer() {
+        const f = this.grid.current();
+        if (!f || this.b.xfer.disabled) return;
+        copyFlow(this.app, f);
+    }
+
     upload() {
         if (this.b.upload.disabled) return;
         // Needs the browser's file chooser: works on computers and phones (a click or a tap), not on TVs.
@@ -587,13 +708,16 @@ export class Explorer extends Layer {
             ['Owner', f.owners && f.owners[0] ? f.owners[0].displayName : ''],
             ['Starred', f.starred ? 'Yes' : ''],
             ['In Trash', f.trashed ? 'Yes' : ''],
-            ['Location', this.loc.place.kind === 'folder' && !file ? this.loc.path.map((p) => p.name).join(' › ') : '']
+            ['Location', (this.loc.place.kind === 'folder' || this.loc.place.kind === 'usb') && !file ? this.loc.path.map((p) => p.name).join(' › ') : ''],
+            ['Free space', f.drive && f.total ? formatSize(f.free) + ' of ' + formatSize(f.total) : '']
         ];
         if (note) rows.unshift(['', note]);
         const actions = [];
         if (!file && !this.b.rename.disabled) actions.push({ id: 'rename', label: 'Rename', icon: icon.rename });
+        if (!file && this.app.usbOk && !this.b.xfer.disabled) actions.push({ id: 'xfer', label: f.usb ? 'Copy to Google Drive' : 'Copy to USB drive', icon: f.usb ? icon.drive : icon.usb });
         const id = await infoBox(this.app.stack, { title: f.name, rows, actions });
         if (id === 'rename') this.rename();
+        else if (id === 'xfer') copyFlow(this.app, f);
     }
 
     /* ---------------- search / sort / view ---------------- */
@@ -657,6 +781,7 @@ export class Explorer extends Layer {
     destroy() {
         if (this.loadCtrl) this.loadCtrl.abort();
         clearTimeout(this.searchTimer);
+        if (this.offJobs) this.offJobs();
         window.removeEventListener('resize', this._onResize);
         this.grid.destroy();
     }

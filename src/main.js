@@ -18,6 +18,8 @@ import { Player } from './ui/player.js';
 import { AccountsScreen, controlsDialog } from './ui/accounts-ui.js';
 import { icon } from './ui/icons.js';
 import { clearTransfers } from './ui/progress.js';
+import { UsbSource, usbAvailable, usbNeedsUpdate } from './drive/usb.js';
+import { CopiesScreen, jobRunning } from './ui/copies.js';
 
 class App {
     init(info) {
@@ -45,6 +47,16 @@ class App {
         this.mock = null;
         this.source = this.demo || !this.driveOk ? this.mockSource() : this.real;
         this.thumbs = new Thumbs(this.source, this.cfg.thumbConcurrency);
+        // USB drives and copies Drive <-> USB: My PC does them (MyPC.usb / MyPC.copy, API 16, TVs only)
+        this.usbOk = usbAvailable();
+        this.usbOld = !this.usbOk && usbNeedsUpdate();
+        this.usb = new UsbSource();
+        this.jobs = new Map();
+        this.jobFns = [];
+        if (this.usbOk) {
+            try { this.offJobs = this.usb.onChange((j) => this.onJob(j)); } catch (e) { /* older My PC */ }
+            this.usb.jobs().then((l) => (l || []).forEach((j) => this.onJob(j))).catch(() => {});
+        }
         this._onPointer = (e) => this.stack.pointerFocus(e.target);
         document.addEventListener('pointerdown', this._onPointer, true);
         MyPC.ready();
@@ -129,6 +141,19 @@ class App {
         if (this.explorer.stack) this.explorer.navigate({ kind: 'all' }, []);
     }
     showControls() { controlsDialog(this); }
+
+    /* ---------- copies Drive <-> USB (My PC does them) ---------- */
+
+    onJob(j) {
+        if (!j || !j.id) return;
+        this.jobs.set(j.id, j);
+        this.jobFns.slice().forEach((fn) => { try { fn(j); } catch (e) { /* a closed screen */ } });
+    }
+    watchJobs(fn) { this.jobFns.push(fn); return () => { this.jobFns = this.jobFns.filter((f) => f !== fn); }; }
+    jobList() { return [...this.jobs.values()].sort((a, b) => (b.startedAt || 0) - (a.startedAt || 0)); }
+    forgetJob(id) { this.jobs.delete(id); this.jobFns.slice().forEach((fn) => { try { fn(null); } catch (e) { /* */ } }); }
+    runningJobs() { return this.jobList().filter(jobRunning).length; }
+    openCopies() { this.stack.push(new CopiesScreen(this)); }
     openViewer(files, i) { if (i >= 0) this.stack.push(new Viewer(this, files, i)); }
     openPlayer(files, i, siblings) { if (i >= 0) this.stack.push(this.player = new Player(this, files, i, siblings)); }
     explorerDetails(f) { this.explorer.details('', f); }
@@ -137,12 +162,14 @@ class App {
         const id = await menu(this.stack, { title: 'MyDrive', items: [
             { id: 'accounts', label: 'Google Drive…', icon: icon.user },
             this.canAddFiles() ? { id: 'add', label: 'Add files from phone', icon: icon.phone } : null,
+            this.usbOk ? { id: 'copies', label: 'Copies', icon: icon.usb, hint: this.runningJobs() ? this.runningJobs() + ' running' : '' } : null,
             { id: 'controls', label: 'Controls', icon: icon.gamepad },
             { id: 'motion', label: 'Reduce animations', icon: icon.check, checked: document.documentElement.classList.contains('low') },
             { sep: true },
             { id: 'exit', label: 'Exit MyDrive', icon: icon.exit }].filter(Boolean) });
         if (id === 'accounts') this.openAccounts();
         else if (id === 'add') this.openAddFiles();
+        else if (id === 'copies') this.openCopies();
         else if (id === 'controls') this.showControls();
         else if (id === 'motion') { const on = !document.documentElement.classList.contains('low'); document.documentElement.classList.toggle('low', on); store.setPref('reduceMotion', on); }
         else if (id === 'exit') MyPC.exit();
@@ -169,7 +196,7 @@ class App {
         if (code === 'denied') this.denied = true;
         if (!quiet) toast((e && e.message) || 'Something went wrong', 'error', 5000);
         // unexpected failures go to the store owner's error page (no names, ids or tokens in the report)
-        if (!/^(cancelled|network|timeout|reauth|signed_out|denied|noconfig|unsupported|busy|too_big|permission|not_found|quota|demo|bad_name|offline)$/.test(code || '')) {
+        if (!/^(cancelled|network|timeout|reauth|signed_out|denied|noconfig|unsupported|busy|too_big|permission|not_found|quota|demo|bad_name|offline|gone|full|drive_full|too_many|perm|bad_request|not_running)$/.test(code || '')) {
             MyPC.report(new Error('drive: ' + (code || 'error') + (e && e.status ? ' ' + e.status : '')), { status: (e && e.status) || 0 });
         }
     }
@@ -188,6 +215,8 @@ class App {
         this.closed = true;
         this.input.destroy();
         document.removeEventListener('pointerdown', this._onPointer, true);
+        if (this.offJobs) try { this.offJobs(); } catch (e) { /* */ }
+        this.jobFns = [];
         if (this.player && !this.player.closed) this.player.close();
         if (this.explorer) this.explorer.destroy();
         this.thumbs.reset();

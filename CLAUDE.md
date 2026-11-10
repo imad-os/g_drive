@@ -38,5 +38,8 @@ the app in the App Store Manager once GitHub Pages has published it.
   "Add files" = `MyPC.drive.addFiles()`, shown only when `status().picker`. Video: `MyPC.drive.stream(file, { worker: 'sw.js' })`,
   `public/sw.js` = only `importScripts('https://pc.geekspro.us/sdk/drive-sw.js');` (My PC's live site is https://pc.geekspro.us).
   Pre-1.1.0 saves `accounts` / `active` are emptied once `status()` says `configured` (My PC has taken them over by then).
+- **USB drives + copies Drive <-> USB (version 1.2.0, owner request 2026-11-10): My PC copies (guide section 20).** MyDrive only browses
+  with `MyPC.usb` and asks with `MyPC.copy` (`src/drive/usb.js`, `src/ui/copies.js`); never read / write the TV's files or move a copy's
+  bytes in MyDrive. Shown only when `MyPC.info().bridges.usb === 1`. Places `{ kind: 'usbroot' }` / `{ kind: 'usb', id: path }` in the explorer.
 - Controls and hints: A B X Y + **+** in the Nintendo places (B bottom = open / OK, A right = back, Y left = actions,
   X top = search, L / R sections, ZL / ZR pages, + = MyDrive menu). Never A B C or "Menu".

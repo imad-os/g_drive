@@ -56,6 +56,27 @@ My PC's built-in Google Drive (SDK API level 14, guide section 19):
 
 `src/drive/api.js` is a thin adapter over `MyPC.drive` with the same methods as the demo (`src/drive/mock.js`).
 
+## USB drives and copies (`MyPC.usb`, `MyPC.copy`)
+
+Since 1.2.0, on a TV whose My PC has SDK API level 16 (guide section 20), MyDrive shows **USB drives** in the
+sidebar and copies files and whole folders **Google Drive -> USB drive** and **USB drive -> Google Drive**.
+**My PC does the copying**, not MyDrive: MyDrive only browses the drives with `MyPC.usb` and asks My PC to copy with
+`MyPC.copy`. The copy goes on when MyDrive is closed, after a restart of the TV and after a network cut.
+
+- Hold OK (or Y) on a file or folder -> **Copy to USB drive** (in Google Drive) or **Copy to Google Drive** (on a USB
+  drive); also the **Copy to USB / Copy to Drive** button of the command bar and the Details box. A folder picker
+  made of menus follows (OK opens a folder, **Copy here**, **New folder**, Back = up), then "If a file is already
+  there": Skip it (default; same name + same size is never copied again) / Replace it / Keep both ("name (2)").
+  Google Docs, Sheets and Slides arrive on the USB drive as .docx, .xlsx and .pptx.
+- **Copies** (sidebar, its badge = copies running; also in the + menu): every copy, live (`MyPC.copy.onChange`),
+  with Pause / Resume / Cancel / Clear. While MyDrive watches, My PC shows no progress card of its own.
+- My PC asks once "MyDrive wants to use your USB drives". Files on a USB drive are not opened by MyDrive (it shows
+  their details); MyDrive can make folders there and copy, nothing else.
+- On a TV with an older My PC the USB drives item says to update My PC. Standalone and on phones / computers there
+  are no USB drives (`MyPC.info().bridges.usb !== 1`), so nothing USB is shown.
+
+`src/drive/usb.js` (USB listing + copy calls, error words), `src/ui/copies.js` (folder picker, copy flow, Copies screen).
+
 ## Google Cloud setup (store owner)
 
 The Google client now belongs to **My PC**, not to MyDrive: it is entered once in the App Store Manager >
@@ -100,6 +121,7 @@ src/store.js                   MyPC.save / load: preferences (and removal of the
 src/net.js                     AppError + concurrency limiter
 src/drive/api.js               adapter over MyPC.drive (list, get, create, rename, move, copy, star, trash, read, upload, stream)
 src/drive/mock.js              demo data, same interface as api.js
+src/drive/usb.js               the TV's USB drives (MyPC.usb) and copies done by My PC (MyPC.copy)
 src/media/thumbs.js            lazy, rate-limited, LRU thumbnails
 src/ui/*                       focus system, explorer, virtual grid, dialogs, on-screen keyboard, viewer, player, Google Drive screen
 docs/                          build output served by GitHub Pages
@@ -126,6 +148,11 @@ GitHub Pages: **Settings → Pages → Deploy from a branch → `main` / `/docs`
 `npm run build`, commit `docs/`, push, and press **Update** in the App Store Manager.
 
 ## Test status
+
+1.2.0 (USB drives and copies) was tested inside My PC build 146 in Chromium with a fake USB drive and a fake Google
+(My PC's own test setup): the USB drives place, a folder on the drive, a copy Drive -> USB and USB -> Drive with the
+folder picker, and the Copies screen. Not yet tested on a Samsung TV with a real USB drive.
+
 
 1.1.0 was tested inside My PC (the real shell, MyDrive installed from the App Store, Chromium, a fake Google
 behind My PC): welcome screen, My PC's sign-in screen over MyDrive, listing My Drive, opening a folder, playing a

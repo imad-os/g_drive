@@ -51,7 +51,8 @@ export const icon = {
     exit: S('<path d="M14 4h4.5A1.5 1.5 0 0 1 20 5.5v13a1.5 1.5 0 0 1-1.5 1.5H14M10 16l-4-4 4-4M6 12h10"/>'),
     backspace: S('<path d="M8.5 5H20a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H8.5L3 12z"/><path d="M11.5 9.5l5 5M16.5 9.5l-5 5"/>'),
     shift: S('<path d="M12 4 4 12h4.5v7h7v-7H20z"/>'),
-    space: S('<path d="M4 10v4h16v-4"/>')
+    space: S('<path d="M4 10v4h16v-4"/>'),
+    usb: S('<rect x="7" y="9" width="10" height="12.5" rx="2"/><path d="M9 9V3.5h6V9M10.5 5.5v1.5M13.5 5.5v1.5"/>')
 };
 
 const TYPE = [

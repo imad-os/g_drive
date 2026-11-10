@@ -93,3 +93,14 @@
     .acc-row { flex-wrap: wrap; }
 }
 
+
+/* Copies screen (Drive <-> USB, done by My PC) */
+.dlg-copies { width: 64rem; max-width: 64rem; }
+.copies-list { display: flex; flex-direction: column; gap: .7rem; overflow-y: auto; scrollbar-width: none; min-height: 0; margin-bottom: .8rem; }
+.copy-row { display: flex; gap: 1rem; align-items: flex-start; padding: .9rem 1rem; background: var(--surface2); border-radius: var(--radius); flex: none; }
+.copy-dir { width: 2rem; height: 2rem; flex: none; color: var(--accent); margin-top: .1rem; }
+.copy-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: .5rem; }
+.copy-head { font-size: 1.2rem; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.copy-info { font-size: 1rem; color: var(--text2); word-break: break-word; }
+.copy-btns { display: flex; gap: .6rem; flex-wrap: wrap; }
+.copy-btns:empty { display: none; }
