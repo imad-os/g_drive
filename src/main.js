@@ -226,7 +226,6 @@ class App {
 }
 
 const app = new App();
-window.MyDriveApp = app;            // (for checks from My PC's tests: tests/run-tests.mjs there)
 
 MyPC.init({
     onInit: (info) => app.init(info),

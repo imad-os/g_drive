@@ -60,13 +60,3 @@
 .viewer-msg .pbar { margin-top: .8rem; width: 22rem; max-width: 100%; }
 .viewer-msg .pinfo { margin-top: .45rem; font-size: 1rem; color: var(--text2); font-variant-numeric: tabular-nums; }
 .viewer-msg .pinfo:empty { display: none; }
-
-/* the TV's own player (MyPC.video, Google Drive on a TV): the picture is drawn BEHIND the page, so the page is see-through
-   meanwhile and the screens under the player are hidden */
-html.tv-video, html.tv-video body, html.tv-video .app { background: transparent !important; }
-html.tv-video .app > :has(~ .player.tv) { visibility: hidden; }
-.player.tv { background: transparent; }
-.player-sub { display: none; position: absolute; left: 10%; right: 10%; bottom: 13%; text-align: center; font-size: 1.7rem; line-height: 1.35;
-  white-space: pre-line; color: #fff; text-shadow: 0 0 4px #000, 0 2px 3px #000; pointer-events: none; }
-.player-sub.on { display: block; }
-.player.tv:not(.hide-ui) .player-sub { bottom: 24%; }
