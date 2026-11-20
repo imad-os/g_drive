@@ -37,6 +37,8 @@ the app in the App Store Manager once GitHub Pages has published it.
   Sign-in = `MyPC.drive.signIn()` (My PC's screen); switching account / signing out is in My PC (Control Panel > Google Drive).
   "Add files" = `MyPC.drive.addFiles()`, shown only when `status().picker`. Video: `MyPC.drive.stream(file, { worker: 'sw.js' })`,
   `public/sw.js` = only `importScripts('https://pc.geekspro.us/sdk/drive-sw.js');` (My PC's live site is https://pc.geekspro.us).
+  **On a TV (version 1.2.1, owner report 2026-11-20)**: the TV's `<video>` skips sw.js, so `src/ui/player.js` plays Drive files with
+  `MyPC.video.open('drive:<id>', { name })` when `MyPC.video.drive()` (My PC 24+): page see-through (`html.tv-video`), own subtitle cues.
   Pre-1.1.0 saves `accounts` / `active` are emptied once `status()` says `configured` (My PC has taken them over by then).
 - **USB drives + copies Drive <-> USB (version 1.2.0, owner request 2026-11-10): My PC copies (guide section 20).** MyDrive only browses
   with `MyPC.usb` and asks with `MyPC.copy` (`src/drive/usb.js`, `src/ui/copies.js`); never read / write the TV's files or move a copy's
