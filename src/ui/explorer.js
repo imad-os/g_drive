@@ -145,7 +145,9 @@ export class Explorer extends Layer {
         this.refreshAccount();
         const last = this.prefs.last;
         const acc = this.app.accountKey();
-        if (last && last.acc === acc && last.place && last.place.kind !== 'search' && !isUsb(last.place)) this.navigate(last.place, last.path || [], { noHistory: true, restoreId: last.sel });
+        // back from MyPhotos / MyVideos / MyMusic (MyPC.open): the same folder, USB too, on the same file
+        const back = this.app.fromOpen && last && last.open;
+        if (last && last.acc === acc && last.place && last.place.kind !== 'search' && (!isUsb(last.place) || (back && this.app.usbOk))) this.navigate(last.place, last.path || [], { noHistory: true, restoreId: last.sel });
         else this.navigate({ kind: 'folder', id: 'root', root: true }, [{ id: 'root', name: 'My Drive' }], { noHistory: true });
         this.focus(this.grid.el);
     }
@@ -420,6 +422,10 @@ export class Explorer extends Layer {
         if (usb) {
             B.newFolder.disabled = kind !== 'usb';
             [B.upload, B.cut, B.copy, B.paste, B.rename, B.star, B.del].forEach((b) => { b.disabled = true; });
+            // delete on a USB drive (MyPC.usb.remove, API 25): files and folders, never a whole drive
+            B.del.disabled = !f || !!f.drive || !this.app.usb.canRemove();
+            B.del.querySelector('.ico').innerHTML = icon.trash;
+            B.del.lastChild.textContent = 'Delete';
             B.details.disabled = !f;
             if (this.current && this.current.disabled) this.focus(this.grid.files.length ? this.grid.el : this.b.search);
             return;
@@ -533,7 +539,7 @@ export class Explorer extends Layer {
             if (f.mimeType === FOLDER) {
                 const path = this.loc.place.kind === 'usb' ? this.loc.path.concat({ id: f.path, name: f.name }) : [{ id: f.path, name: f.name }];
                 this.navigate({ kind: 'usb', id: f.path }, path);
-            } else this.details('MyDrive shows the files of your Google Drive. It can copy this file to Google Drive: choose "Copy to Google Drive".');
+            } else this.openMedia(f);
             return;
         }
         if (f.mimeType === FOLDER) {
@@ -542,6 +548,34 @@ export class Explorer extends Layer {
             return;
         }
         if (this.loc.place.kind === 'trash') { this.details(); return; }
+        this.openMedia(f);
+    }
+
+    /** My PC's own apps can show it (MyPC.open, API 25): pictures in MyPhotos, videos in MyVideos, songs in MyMusic. */
+    canOpenInMyPC() {
+        if (this.app.demo || !(window.MyPC && MyPC.open && MyPC.apiLevel >= 25)) return false;
+        let info = null;
+        try { info = MyPC.info(); } catch (e) { /* before init */ }
+        return !!(info && info.bridges && info.bridges.open === 1);
+    }
+    /** Pictures, videos and songs: in My PC's app (it closes MyDrive and opens it again on this file after), else here. */
+    async openMedia(f) {
+        if ((isImage(f) || isPlayable(f)) && this.canOpenInMyPC()) {
+            const loc = this.loc, last = this.loc.path[this.loc.path.length - 1];
+            const folder = (last && last.name) || (sectionOf(loc.place) || {}).label || '';
+            store.setPref('last', { acc: this.app.accountKey(), place: { ...loc.place }, path: loc.path.slice(-12), sel: f.id, open: Date.now() });
+            try {
+                await MyPC.open(f, { list: this.grid.files.filter((x) => x.mimeType !== FOLDER), folder });
+                return;                              // My PC closes MyDrive now
+            } catch (e) {
+                // 'unsupported' (an older My PC, or a kind My PC has no app for) and 'too-big' (a Drive video it cannot
+                // stream here): shown here instead; anything else is said, then shown here too
+                const code = String((e && e.code) || '');
+                if (code !== 'unsupported' && code !== 'too-big' && code !== 'cancelled') toast((e && e.message) || 'My PC could not open it.', 'error', 4000);
+                store.setPref('last', { acc: this.app.accountKey(), place: { ...loc.place }, path: loc.path.slice(-12) });
+            }
+        }
+        if (f.usb) { this.details('MyDrive shows the files of your Google Drive. It can copy this file to Google Drive: choose "Copy to Google Drive".'); return; }
         if (isImage(f)) { const list = this.grid.files.filter(isImage); this.app.openViewer(list, list.indexOf(f)); return; }
         if (isPlayable(f)) { const list = this.grid.files.filter(isPlayable); this.app.openPlayer(list, list.indexOf(f), this.grid.files); return; }
         this.details('This kind of file cannot be shown on a TV. Open it on a computer or phone.');
@@ -622,6 +656,7 @@ export class Explorer extends Layer {
     async trashOrRestore() {
         const f = this.grid.current();
         if (!f || this.b.del.disabled) return;
+        if (f.usb) { this.usbDelete(f); return; }
         if (this.loc.place.kind === 'trash') {
             const r = await this.run('Restoring', () => this.app.source.untrash(f.id));
             if (r) { toast('"' + f.name + '" restored'); this.afterChange(); }
@@ -634,6 +669,21 @@ export class Explorer extends Layer {
         if (!ok) return;
         const r = await this.run('Moving to Trash', () => this.app.source.trash(f.id));
         if (r) { toast('"' + f.name + '" moved to Trash'); this.afterChange(); }
+    }
+
+    /** A file or folder of a USB drive, deleted for ever by My PC (there is no trash on a USB drive): asked first. */
+    async usbDelete(f) {
+        if (!f || f.drive) return;
+        const dir = f.mimeType === FOLDER;
+        const ok = await confirm(this.app.stack, {
+            title: dir ? 'Delete this folder?' : 'Delete this file?', ok: 'Delete', danger: true,
+            text: `"${f.name}"${dir ? ' and everything in it' : ''} will be deleted from the USB drive for ever. It cannot be restored.`
+        });
+        if (!ok) return;
+        const files = this.grid.files, i = files.indexOf(f);
+        const next = files[i + 1] || files[i - 1];
+        const r = await this.run('Deleting', () => this.app.usb.remove(f.path));
+        if (r) { toast('"' + f.name + '" deleted'); this.afterChange(next && next.id); }
     }
 
     setClip(mode) {

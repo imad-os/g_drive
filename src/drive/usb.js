@@ -98,6 +98,11 @@ export class UsbSource {
         return { id: r.path, path: r.path, name: r.name, usb: true, mimeType: FOLDER, capabilities: { canAddChildren: true } };
     }
 
+    /** Can My PC delete on the USB drives? (MyPC.usb.remove, API 25) */
+    canRemove() { return !!(window.MyPC && MyPC.usb && typeof MyPC.usb.remove === 'function' && MyPC.apiLevel >= 25); }
+    /** Deletes a file, or a folder with everything in it, for ever (the caller asked the user). */
+    remove(path) { return call(() => MyPC.usb.remove(path)); }
+
     /** A drive's name for a path ("USB A1 › Photos"). */
     labelOf(path) {
         const d = this.drives.find((x) => path === x.path || path.indexOf(x.path + '/') === 0);

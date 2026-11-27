@@ -27,6 +27,8 @@ class App {
         this.lang = this.info.lang || 'en';
         this.profileName = (this.info.profile && this.info.profile.name) || '';
         this.standalone = !!this.info.standalone;
+        // opened again after a file was shown in MyPhotos / MyVideos / MyMusic (MyPC.open): back in the same folder
+        this.fromOpen = !!(MyPC.launch && MyPC.launch.from === 'open');
         this.cfg = readConfig(this.standalone);
         document.documentElement.dir = 'ltr';           // texts are English for now: keep the layout left-to-right
         const low = (this.info.quality && this.info.quality.tier === 'low') || store.prefs().reduceMotion
