@@ -230,6 +230,7 @@ class App {
 const app = new App();
 
 MyPC.init({
+    uses: ['photos', 'videos', 'music'],          // My PC's apps MyPC.open shows files in (API 26: got ready while MyDrive starts)
     onInit: (info) => app.init(info),
     onStart: () => app.start(),
     onPause: () => app.pause(),

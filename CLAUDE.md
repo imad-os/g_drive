@@ -46,5 +46,8 @@ the app in the App Store Manager once GitHub Pages has published it.
   MyVideos / MyMusic; closing that app opens MyDrive again with `MyPC.launch.from === 'open'` (`app.fromOpen`), which restores the saved
   `prefs.last` (with `sel` and `open`, USB places too). `unsupported` / `too-big` (or an older My PC, or the demo) = MyDrive's own viewer / player
   as before. USB files and folders: Delete asks first, then `MyPC.usb.remove` (`UsbSource.remove`); never a whole drive.
+  **1.3.1 (owner request 2026-11-28, My PC SDK API 26)**: My PC shows the file OVER MyDrive (paused with onPause / onResume, nothing reloads, one
+  Back returns): `MyPC.init({ uses: ['photos', 'videos', 'music'] })` (My PC gets them ready while MyDrive starts), `MyPC.open(f, { list, folder,
+  from: tile })` (the zoom starts from the file's `.tile[data-id]`); `prefs.last` with `open` is saved only for an older My PC (API 25).
 - Controls and hints: A B X Y + **+** in the Nintendo places (B bottom = open / OK, A right = back, Y left = actions,
   X top = search, L / R sections, ZL / ZR pages, + = MyDrive menu). Never A B C or "Menu".
