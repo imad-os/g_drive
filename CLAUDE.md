@@ -49,5 +49,7 @@ the app in the App Store Manager once GitHub Pages has published it.
   **1.3.1 (owner request 2026-11-28, My PC SDK API 26)**: My PC shows the file OVER MyDrive (paused with onPause / onResume, nothing reloads, one
   Back returns): `MyPC.init({ uses: ['photos', 'videos', 'music'] })` (My PC gets them ready while MyDrive starts), `MyPC.open(f, { list, folder,
   from: tile })` (the zoom starts from the file's `.tile[data-id]`); `prefs.last` with `open` is saved only for an older My PC (API 25).
+- **Opens online (`"run": "online"` in `public/mypc-app.json`, version 1.3.2, owner decision 2026-11-28)**: My PC opens installed apps from
+  their USB copy by default; MyDrive streams Drive videos through its service worker (`sw.js`), which only runs from its web address. Keep it.
 - Controls and hints: A B X Y + **+** in the Nintendo places (B bottom = open / OK, A right = back, Y left = actions,
   X top = search, L / R sections, ZL / ZR pages, + = MyDrive menu). Never A B C or "Menu".
