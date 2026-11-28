@@ -5,7 +5,8 @@
   "description": "Browse, view and play your Google Drive files with a TV remote or a game controller, open them in MyPhotos, MyVideos and MyMusic, and copy them to and from USB drives on the TV.",
   "type": "app",
   "entry": "index.html",
-  "icon": "icon.svg?v=1.3.1",
-  "version": "1.3.1",
+  "icon": "icon.svg?v=1.3.2",
+  "version": "1.3.2",
+  "run": "online",
   "config": {}
 }
