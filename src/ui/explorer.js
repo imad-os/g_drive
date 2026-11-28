@@ -563,16 +563,20 @@ export class Explorer extends Layer {
         if ((isImage(f) || isPlayable(f)) && this.canOpenInMyPC()) {
             const loc = this.loc, last = this.loc.path[this.loc.path.length - 1];
             const folder = (last && last.name) || (sectionOf(loc.place) || {}).label || '';
-            store.setPref('last', { acc: this.app.accountKey(), place: { ...loc.place }, path: loc.path.slice(-12), sel: f.id, open: Date.now() });
+            // My PC API 26+ shows it over MyDrive (paused, nothing reloads); an older one closes MyDrive and opens it again: remember where we are
+            const over = MyPC.apiLevel >= 26;
+            if (!over) store.setPref('last', { acc: this.app.accountKey(), place: { ...loc.place }, path: loc.path.slice(-12), sel: f.id, open: Date.now() });
+            let tile = null;
+            try { tile = this.grid.inner.querySelector('.tile[data-id="' + CSS.escape(String(f.id)) + '"]'); } catch (e) { tile = null; }
             try {
-                await MyPC.open(f, { list: this.grid.files.filter((x) => x.mimeType !== FOLDER), folder });
-                return;                              // My PC closes MyDrive now
+                await MyPC.open(f, { list: this.grid.files.filter((x) => x.mimeType !== FOLDER), folder, from: tile || undefined });
+                return;                              // shown by My PC (over MyDrive, or MyDrive closes now on API 25)
             } catch (e) {
                 // 'unsupported' (an older My PC, or a kind My PC has no app for) and 'too-big' (a Drive video it cannot
                 // stream here): shown here instead; anything else is said, then shown here too
                 const code = String((e && e.code) || '');
                 if (code !== 'unsupported' && code !== 'too-big' && code !== 'cancelled') toast((e && e.message) || 'My PC could not open it.', 'error', 4000);
-                store.setPref('last', { acc: this.app.accountKey(), place: { ...loc.place }, path: loc.path.slice(-12) });
+                if (!over) store.setPref('last', { acc: this.app.accountKey(), place: { ...loc.place }, path: loc.path.slice(-12) });
             }
         }
         if (f.usb) { this.details('MyDrive shows the files of your Google Drive. It can copy this file to Google Drive: choose "Copy to Google Drive".'); return; }
